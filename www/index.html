@@ -1018,7 +1018,10 @@ function buildEnergySection(s) {
     btn.setAttribute('aria-pressed', activePeriod === period ? 'true' : 'false');
     btn.addEventListener('click', () => {
       activePeriod = period;
+      powerHistory = [];
+      dailyBars = [];
       renderAll();
+      loadHistoryData();
     });    tabs.appendChild(btn);
   });
   section.appendChild(tabs);
@@ -1371,12 +1374,6 @@ async function init() {
   setTimeout(async () => {
     if (!snapshot) await loadDemoData();
   }, 5000);
-
-  // Chart data refresh
-  await loadHistoryData();
-  setInterval(async () => {
-    await loadHistoryData();
-  }, 60000);
 }
 
 async function loadDemoData() {
@@ -1388,45 +1385,127 @@ async function loadDemoData() {
 }
 
 async function loadHistoryData() {
-  if (snapshot && !snapshot.demo) {
-    if (snapshot.powerHistory?.length) powerHistory = snapshot.powerHistory;
-    if (snapshot.dailyBars?.length) dailyBars = snapshot.dailyBars;
+  if (snapshot?.demo) {
+    loadDemoHistory();
     renderPowerChart();
     renderBarChart();
     return;
   }
+  if (!snapshot?.historyConfig) {
+    renderPowerChart();
+    renderBarChart();
+    return;
+  }
+  await fetchHistoryForPeriod(activePeriod);
+}
 
-  // Demo: generate synthetic
+async function fetchHistoryForPeriod(period) {
+  const hc = snapshot?.historyConfig;
+  if (!hc || !socket?.connected) return;
+
+  const toW = (v, unit) => v === null || v === undefined ? null : unit === 'kW' ? v * 1000 : v;
+
+  function getHistory(id, opts) {
+    return new Promise(resolve => {
+      socket.emit('getHistory', id, opts, (err, result) => {
+        if (err) { console.warn('[EF] getHistory error for', id, err); resolve([]); return; }
+        resolve(result || []);
+      });
+    });
+  }
+
+  const nowMs = Date.now();
+
+  if (period === 'today') {
+    // 24h 5-min line chart
+    const from = nowMs - 24 * 3600_000;
+    const opts = { instance: hc.sqlInstance, start: from, end: nowMs, step: 300_000, aggregate: 'average' };
+
+    const ids = [hc.solar, hc.grid, hc.house, hc.batCharge, hc.batDischarge, hc.batPower].filter(Boolean);
+    const results = {};
+    await Promise.all(ids.map(async id => { results[id] = await getHistory(id, opts); }));
+
+    const map = new Map();
+    const ensure = ts => { if (!map.has(ts)) map.set(ts, { ts, solar: null, grid: null, house: null, battery: null, ev: null }); return map.get(ts); };
+
+    if (hc.solar) for (const p of results[hc.solar] || []) ensure(p.ts).solar = toW(p.val, hc.solarUnit);
+    if (hc.grid)  for (const p of results[hc.grid]  || []) ensure(p.ts).grid  = toW(p.val, hc.gridUnit);
+    if (hc.house) for (const p of results[hc.house] || []) ensure(p.ts).house = toW(p.val, hc.houseUnit);
+
+    if (hc.batCharge && hc.batDischarge) {
+      const disMap = new Map((results[hc.batDischarge] || []).map(p => [p.ts, p.val]));
+      for (const p of results[hc.batCharge] || []) {
+        const dis = toW(disMap.get(p.ts) ?? null, hc.batUnit) ?? 0;
+        const chg = toW(p.val, hc.batUnit) ?? 0;
+        ensure(p.ts).battery = dis - chg;
+      }
+    } else if (hc.batPower) {
+      for (const p of results[hc.batPower] || []) ensure(p.ts).battery = toW(p.val, hc.batUnit);
+    }
+
+    powerHistory = Array.from(map.values()).sort((a, b) => a.ts - b.ts);
+    renderPowerChart();
+
+    // Also refresh 30-day solar bars for the daily bar chart
+    if (hc.solar) {
+      const from30 = nowMs - 30 * 86_400_000;
+      const opts30 = { instance: hc.sqlInstance, start: from30, end: nowMs, step: 3600_000, aggregate: 'average' };
+      const solarPts = await getHistory(hc.solar, opts30);
+      dailyBars = aggregateToDailyBars(solarPts, hc.solarUnit, nowMs);
+      renderBarChart();
+    }
+
+  } else if (period === 'month') {
+    // 30 days, daily resolution
+    if (!hc.solar) return;
+    const from30 = nowMs - 30 * 86_400_000;
+    const opts = { instance: hc.sqlInstance, start: from30, end: nowMs, step: 3600_000, aggregate: 'average' };
+    const solarPts = await getHistory(hc.solar, opts);
+    dailyBars = aggregateToDailyBars(solarPts, hc.solarUnit, nowMs);
+    renderPowerChart();
+
+  } else if (period === 'year') {
+    // 365 days, daily → monthly aggregation
+    if (!hc.solar) return;
+    const from365 = nowMs - 365 * 86_400_000;
+    const opts = { instance: hc.sqlInstance, start: from365, end: nowMs, step: 3600_000, aggregate: 'average' };
+    const solarPts = await getHistory(hc.solar, opts);
+    dailyBars = aggregateToDailyBars(solarPts, hc.solarUnit, nowMs);
+    renderPowerChart();
+  }
+}
+
+function aggregateToDailyBars(pts, unit, nowMs) {
+  const toW = (v, u) => v === null || v === undefined ? null : u === 'kW' ? v * 1000 : v;
+  const todayStr = new Date(nowMs).toISOString().substring(0, 10);
+  const dayMap = new Map();
+  for (const p of pts) {
+    if (p.val === null || p.val === undefined) continue;
+    const day = new Date(p.ts).toISOString().substring(0, 10);
+    const wh = toW(p.val, unit) * (3600 / 3600); // hourly average × 1h = Wh
+    dayMap.set(day, (dayMap.get(day) ?? 0) + wh);
+  }
+  return Array.from(dayMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, wh]) => ({ date, kWh: wh / 1000, complete: date < todayStr }));
+}
+
+function loadDemoHistory() {
   const now = Date.now();
   if (powerHistory.length === 0) {
     for (let i = 1440; i >= 0; i--) {
       const t_h = now - i * 60000;
       const hour = new Date(t_h).getHours() + new Date(t_h).getMinutes() / 60;
       const solarW = hour >= 6 && hour <= 20 ? Math.max(0, Math.sin((hour - 6) / 14 * Math.PI) * 5000) : 0;
-      powerHistory.push({
-        ts: t_h,
-        solar: solarW + (Math.random() - 0.5) * 200,
-        house: 1500 + Math.random() * 1000,
-        battery: solarW > 2000 ? -(solarW - 2500) : solarW < 500 && hour < 20 ? 1000 : 0,
-        grid: Math.random() > 0.7 ? -500 : 300,
-        ev: null,
-      });
+      powerHistory.push({ ts: t_h, solar: solarW + (Math.random() - 0.5) * 200, house: 1500 + Math.random() * 1000, battery: solarW > 2000 ? -(solarW - 2500) : solarW < 500 && hour < 20 ? 1000 : 0, grid: Math.random() > 0.7 ? -500 : 300, ev: null });
     }
   }
-
   if (dailyBars.length === 0) {
     for (let i = 30; i >= 1; i--) {
       const d = new Date(now - i * 86400000);
-      dailyBars.push({
-        date: d.toISOString().substring(0, 10),
-        kWh: 5 + Math.random() * 30,
-        complete: true,
-      });
+      dailyBars.push({ date: d.toISOString().substring(0, 10), kWh: 5 + Math.random() * 30, complete: true });
     }
   }
-
-  renderPowerChart();
-  renderBarChart();
 }
 
 function buildClientDemoSnapshot(ts) {

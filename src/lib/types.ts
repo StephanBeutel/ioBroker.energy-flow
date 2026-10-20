@@ -303,6 +303,21 @@ export interface WebMessage {
     data: unknown;
 }
 
+export interface DashboardHistoryConfig {
+    sqlInstance: string;
+    solar?: string;
+    grid?: string;
+    house?: string;
+    batCharge?: string;
+    batDischarge?: string;
+    batPower?: string;
+    soc?: string;
+    solarUnit?: string;
+    gridUnit?: string;
+    houseUnit?: string;
+    batUnit?: string;
+}
+
 export interface DashboardSnapshot {
     power: PowerState;
     flows: EnergyFlows;
@@ -316,6 +331,5 @@ export interface DashboardSnapshot {
     stats: SolarStatistics;
     ts: number;
     demo: boolean;
-    powerHistory?: PowerHistoryPoint[];
-    dailyBars?: DailySolarBar[];
+    historyConfig?: DashboardHistoryConfig;
 }
