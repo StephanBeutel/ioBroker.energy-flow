@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "noEmit": true
+  },
+  "ts-node": {
+    "files": true,
+    "transpileOnly": true,
+    "require": [],
+    "compiler": "typescript",
+    "experimentalSpecifierResolution": "node"
+  }
+}

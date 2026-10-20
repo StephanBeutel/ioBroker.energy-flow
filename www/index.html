@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Energy Flow Dashboard</title>
+<style>
+  /* ===== CSS Custom Properties ===== */
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-card: #1a2235;
+    --bg-card-hover: #1e2940;
+    --border: #2a3a52;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --cyan: #06b6d4;
+    --cyan-dim: #0891b2;
+    --blue: #3b82f6;
+    --blue-dim: #2563eb;
+    --green: #10b981;
+    --green-dim: #059669;
+    --orange: #f97316;
+    --orange-dim: #ea580c;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+    --stale: #92400e;
+    --estimated: #1e3a5f;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --flow-color-solar: var(--green);
+    --flow-color-grid: var(--orange);
+    --flow-color-battery: var(--cyan);
+    --flow-color-house: var(--blue);
+    --flow-color-ev: var(--purple);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-primary: #f0f4f8;
+      --bg-secondary: #e2e8f0;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f8fafc;
+      --border: #cbd5e1;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ===== Layout ===== */
+  .app-header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .app-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--cyan);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app-title svg { width: 24px; height: 24px; }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+
+  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .status-dot.stale { background: var(--yellow); }
+  .status-dot.error { background: var(--red); }
+  .status-dot.demo { background: var(--purple); box-shadow: 0 0 6px var(--purple); animation: pulse 2s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .demo-banner {
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid var(--purple);
+    color: var(--purple);
+    text-align: center;
+    padding: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    display: none;
+  }
+
+  .demo-banner.visible { display: block; }
+
+  .main-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+
+  /* ===== Cards ===== */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ===== Energy Flow Diagram ===== */
+  .flow-section {
+    grid-column: 1 / -1;
+  }
+
+  .flow-diagram {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    min-height: 280px;
+    max-height: 500px;
+  }
+
+  .flow-diagram svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .flow-node {
+    cursor: default;
+    user-select: none;
+  }
+
+  .node-bg {
+    fill: var(--bg-secondary);
+    stroke: var(--border);
+    stroke-width: 2;
+    rx: 12;
+    ry: 12;
+    transition: fill 0.2s;
+  }
+
+  .node-label {
+    fill: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+
+  .node-power {
+    fill: var(--text-primary);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 400;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+
+  .node-sub {
+    fill: var(--text-secondary);
+    font-family: inherit;
+    font-size: 10px;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+
+  .flow-line {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    opacity: 0.7;
+    transition: stroke-width 0.3s, opacity 0.3s;
+  }
+
+  .flow-line.active {
+    opacity: 1;
+    stroke-width: 4;
+    animation: dash 2s linear infinite;
+  }
+
+  .flow-line.inactive { opacity: 0.15; stroke-dasharray: none; }
+
+  @keyframes dash {
+    to { stroke-dashoffset: -24; }
+  }
+
+  .flow-arrow {
+    stroke-width: 0;
+  }
+
+  /* ===== Stats Grid ===== */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+
+  .stat-card.solar::before { background: var(--green); }
+  .stat-card.grid-import::before { background: var(--orange); }
+  .stat-card.grid-export::before { background: var(--yellow); }
+  .stat-card.battery::before { background: var(--cyan); }
+  .stat-card.house::before { background: var(--blue); }
+  .stat-card.ev::before { background: var(--purple); }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .stat-quality {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-top: 2px;
+  }
+
+  .stat-quality.estimated { background: var(--estimated); color: var(--cyan); }
+  .stat-quality.stale { background: var(--stale); color: var(--yellow); }
+  .stat-quality.unavailable { background: rgba(239,68,68,0.15); color: var(--red); }
+
+  /* ===== Period Tabs ===== */
+  .period-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+  }
+
+  .period-tab {
+    flex: 1;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .period-tab.active {
+    background: var(--bg-card);
+    color: var(--cyan);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+
+  /* ===== Charts ===== */
+  .chart-container {
+    position: relative;
+    width: 100%;
+    height: 200px;
+  }
+
+  .chart-container.tall { height: 260px; }
+
+  canvas { width: 100% !important; }
+
+  /* ===== Meter Readings ===== */
+  .meter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .meter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+
+  .meter-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+  .meter-value { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+  .meter-source { font-size: 10px; color: var(--text-muted); font-style: italic; }
+
+  /* ===== Desktop Layout ===== */
+  @media (min-width: 768px) {
+    .main-content {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .flow-section { grid-column: 1 / -1; }
+    .energy-today-section { grid-column: 1 / -1; }
+  }
+
+  @media (min-width: 1024px) {
+    .main-content {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .flow-section { grid-column: 1 / -1; }
+    .energy-today-section { grid-column: 1 / -1; }
+    .chart-section { grid-column: 1 / -1; }
+    .chart-section-half { grid-column: span 2; }
+  }
+
+  /* ===== SOC indicator ===== */
+  .soc-bar {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  .soc-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+    background: var(--cyan);
+  }
+
+  .soc-fill.low { background: var(--red); }
+  .soc-fill.mid { background: var(--yellow); }
+  .soc-fill.high { background: var(--green); }
+
+  /* ===== Quality indicators ===== */
+  .quality-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  .quality-dot.measured { background: var(--green); }
+  .quality-dot.calculated { background: var(--blue); }
+  .quality-dot.estimated { background: var(--yellow); }
+  .quality-dot.unavailable { background: var(--red); }
+  .quality-dot.stale { background: var(--orange); }
+
+  /* ===== Legend ===== */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+
+  .legend-item.active { border-color: var(--border); background: var(--bg-secondary); }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ===== Last update ===== */
+  .last-update {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    padding: 4px 0;
+  }
+
+  /* ===== Conflict indicator ===== */
+  .conflict-banner {
+    display: none;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid var(--red);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    color: var(--red);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .conflict-banner.visible { display: flex; align-items: center; gap: 8px; }
+
+  /* ===== Loading ===== */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-muted);
+    font-size: 14px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+    </svg>
+    Energy Flow Dashboard
+  </div>
+  <div class="header-meta">
+    <div id="demoBadge" class="status-badge" style="display:none">
+      <span class="status-dot demo"></span>
+      <span>Demo</span>
+    </div>
+    <div id="statusBadge" class="status-badge">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Verbinde...</span>
+    </div>
+    <select id="langSelect" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;">
+      <option value="de">DE</option>
+      <option value="en">EN</option>
+    </select>
+  </div>
+</header>
+
+<div id="demoBanner" class="demo-banner">
+  ⚠️ DEMO-MODUS – Synthetische Daten. Echte Statistiken werden nicht verändert.
+</div>
+
+<div id="conflictBanner" class="conflict-banner">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <span id="conflictText">Messungskonflikt erkannt</span>
+</div>
+
+<main class="main-content" id="mainContent">
+  <div class="loading" id="loadingState">
+    <div class="spinner" role="status" aria-label="Wird geladen"></div>
+    <span>Dashboard wird geladen...</span>
+  </div>
+</main>
+
+<script>
+// ===== Translations =====
+const I18N = {
+  de: {
+    solar: 'Solar', battery: 'Batterie', grid: 'Netz', house: 'Haushalt', ev: 'E-Fahrzeug',
+    today: 'Heute', month: 'Monat', year: 'Jahr',
+    generation: 'Erzeugung', consumption: 'Verbrauch', import: 'Bezug', export: 'Einspeisung',
+    batteryCharge: 'Laden', batteryDischarge: 'Entladen', evCharging: 'E-Laden',
+    soc: 'Ladezustand', charging: 'Lädt', discharging: 'Entlädt', idle: 'Bereit', unavailable: 'N/V',
+    meters: 'Zählerstände', peakPower: 'Spitzenleistung', highDay: 'Besttag', lowDay: 'Schlechttag', avgDay: 'Tagesdurchschnitt',
+    daysIncluded: 'Tage', lastUpdate: 'Letzte Aktualisierung', estimated: 'Geschätzt', stale: 'Veraltet', noData: 'Keine Daten',
+    powerHistory: 'Leistungsverlauf', dailySolar: 'Tägliche Solarernte',
+    gridImportMeter: 'Bezugszähler', gridExportMeter: 'Einspeisezähler', sinceTracking: 'seit Aufzeichnung',
+    demoMode: 'Demo-Modus', statistics: 'Statistik',
+    conflictBalance: 'Leistungsbilanz-Konflikt', conflictEv: 'EV-Mess-Konflikt',
+    connected: 'Verbunden', disconnected: 'Getrennt', connecting: 'Verbinde...',
+    flowsEstimated: 'Flüsse geschätzt',
+  },
+  en: {
+    solar: 'Solar', battery: 'Battery', grid: 'Grid', house: 'Household', ev: 'EV Charging',
+    today: 'Today', month: 'Month', year: 'Year',
+    generation: 'Generation', consumption: 'Consumption', import: 'Import', export: 'Export',
+    batteryCharge: 'Charge', batteryDischarge: 'Discharge', evCharging: 'EV Charge',
+    soc: 'State of charge', charging: 'Charging', discharging: 'Discharging', idle: 'Idle', unavailable: 'N/A',
+    meters: 'Meter readings', peakPower: 'Peak power', highDay: 'Best day', lowDay: 'Worst day', avgDay: 'Daily avg',
+    daysIncluded: 'days', lastUpdate: 'Last update', estimated: 'Estimated', stale: 'Stale', noData: 'No data',
+    powerHistory: 'Power history', dailySolar: 'Daily solar yield',
+    gridImportMeter: 'Import meter', gridExportMeter: 'Export meter', sinceTracking: 'since tracking',
+    demoMode: 'Demo mode', statistics: 'Statistics',
+    conflictBalance: 'Power balance conflict', conflictEv: 'EV measurement conflict',
+    connected: 'Connected', disconnected: 'Disconnected', connecting: 'Connecting...',
+    flowsEstimated: 'Flows estimated',
+  }
+};
+
+let lang = localStorage.getItem('ef-lang') || 'de';
+let t = I18N[lang];
+
+document.getElementById('langSelect').value = lang;
+document.getElementById('langSelect').addEventListener('change', (e) => {
+  lang = e.target.value;
+  localStorage.setItem('ef-lang', lang);
+  t = I18N[lang];
+  document.getElementById('demoBanner').textContent =
+    lang === 'de'
+      ? '⚠️ DEMO-MODUS – Synthetische Daten. Echte Statistiken werden nicht verändert.'
+      : '⚠️ DEMO MODE – Synthetic data only. Real statistics are not affected.';
+  renderAll();
+});
+
+// ===== State =====
+let snapshot = null;
+let powerHistory = [];
+let dailyBars = [];
+let activePeriod = 'today';
+let activeChartSeries = { solar: true, house: true, battery: true, grid: true, ev: false };
+let powerChart = null;
+let barChart = null;
+
+// ===== Formatting helpers =====
+function fmtW(w) {
+  if (w === null || w === undefined) return t.noData;
+  const abs = Math.abs(w);
+  if (abs >= 1000) return (w / 1000).toFixed(2) + ' kW';
+  return Math.round(w) + ' W';
+}
+
+function fmtKwh(kWh, dp = 2) {
+  if (kWh === null || kWh === undefined) return t.noData;
+  return (+kWh).toFixed(dp) + ' kWh';
+}
+
+function fmtPct(pct) {
+  if (pct === null || pct === undefined) return t.noData;
+  return Math.round(pct) + ' %';
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleTimeString(lang === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function qualityBadge(nv) {
+  if (!nv || nv.value === null) return `<span class="stat-quality unavailable" aria-label="${t.noData}">✗ ${t.noData}</span>`;
+  if (nv.quality?.freshness === 'stale') return `<span class="stat-quality stale" aria-label="${t.stale}">⚠ ${t.stale}</span>`;
+  if (nv.quality?.provenance === 'estimated') return `<span class="stat-quality estimated" aria-label="${t.estimated}">~ ${t.estimated}</span>`;
+  return '';
+}
+
+function escapeHtml(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+// ===== ioBroker communication =====
+let instanceId = 0;
+
+function detectInstance() {
+  const m = window.location.pathname.match(/energy-flow\.(\d+)/);
+  if (m) instanceId = parseInt(m[1], 10);
+}
+
+function fetchSnapshot() {
+  return new Promise((resolve) => {
+    if (window.socketcluster) {
+      window.socketcluster.emit('sendTo', {
+        adapterInstance: `energy-flow.${instanceId}`,
+        command: 'getSnapshot',
+        message: {}
+      }, (err, data) => {
+        if (err) { resolve(null); return; }
+        resolve(data);
+      });
+    } else if (window.io) {
+      // socket.io fallback
+      resolve(null);
+    } else {
+      resolve(null);
+    }
+  });
+}
+
+async function loadData() {
+  try {
+    // Try ioBroker web socket
+    if (typeof window.io !== 'undefined') {
+      await loadViaSocket();
+    } else {
+      // Fallback: use REST-like fetch via ioBroker web adapter
+      await loadViaFetch();
+    }
+  } catch (err) {
+    console.error('Data load error:', err);
+    setStatus('error', t.disconnected);
+  }
+}
+
+async function loadViaFetch() {
+  // Request data via custom ioBroker web endpoint or direct adapter message
+  // In production this is served by the ioBroker web adapter extension
+  try {
+    const resp = await fetch('./api/snapshot');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    snapshot = await resp.json();
+    setStatus('live', t.connected);
+    renderAll();
+  } catch {
+    setStatus('error', t.disconnected);
+  }
+}
+
+function loadViaSocket() {
+  return new Promise((resolve) => {
+    // Use ioBroker socket.io if available
+    if (typeof window.servConn !== 'undefined') {
+      window.servConn.sendTo(`energy-flow.${instanceId}`, 'getSnapshot', {}, (data) => {
+        if (data) { snapshot = data; setStatus('live', t.connected); renderAll(); }
+        else setStatus('error', t.disconnected);
+        resolve();
+      });
+    } else {
+      resolve();
+    }
+  });
+}
+
+// ===== Status helpers =====
+function setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if (dot) { dot.className = 'status-dot ' + state; }
+  if (txt) txt.textContent = text;
+}
+
+// ===== Render everything =====
+function renderAll() {
+  const main = document.getElementById('mainContent');
+  if (!main) return;
+
+  // Remove loading state
+  const loading = document.getElementById('loadingState');
+  if (loading) loading.remove();
+
+  main.innerHTML = '';
+
+  if (!snapshot) {
+    main.innerHTML = `<div class="loading"><span>${t.noData}</span></div>`;
+    return;
+  }
+
+  const s = snapshot;
+  const isDemo = s.demo;
+
+  // Demo banner
+  const demoBanner = document.getElementById('demoBanner');
+  const demoBadge = document.getElementById('demoBadge');
+  if (demoBanner) demoBanner.className = isDemo ? 'demo-banner visible' : 'demo-banner';
+  if (demoBadge) demoBadge.style.display = isDemo ? 'flex' : 'none';
+
+  // Conflict banner
+  const conflictBanner = document.getElementById('conflictBanner');
+  const conflictText = document.getElementById('conflictText');
+  if (conflictBanner && conflictText) {
+    const hasConflict = (s.power?.balanceDiscrepancyW?.quality?.note || '').includes('CONFLICT');
+    conflictBanner.className = hasConflict ? 'conflict-banner visible' : 'conflict-banner';
+    if (hasConflict) conflictText.textContent = t.conflictBalance;
+  }
+
+  // Sections
+  main.appendChild(buildFlowSection(s));
+  main.appendChild(buildEnergySection(s));
+  main.appendChild(buildChartSection());
+  main.appendChild(buildDailyBarsSection());
+  main.appendChild(buildMetersSection(s));
+  main.appendChild(buildStatsSection(s));
+
+  // Update timestamp
+  const ts = document.createElement('p');
+  ts.className = 'last-update';
+  ts.style.gridColumn = '1 / -1';
+  ts.textContent = `${t.lastUpdate}: ${fmtTime(s.ts)}`;
+  main.appendChild(ts);
+
+  // Render charts
+  renderPowerChart();
+  renderBarChart();
+}
+
+// ===== Flow diagram =====
+function buildFlowSection(s) {
+  const section = document.createElement('section');
+  section.className = 'card flow-section';
+  section.setAttribute('aria-label', 'Energy flow diagram');
+
+  const title = document.createElement('div');
+  title.className = 'card-title';
+  title.textContent = 'Energy Flow';
+  section.appendChild(title);
+
+  const flows = s.flows || {};
+  const p = s.power || {};
+  const isEv = p.evStatus !== 'unavailable' && p.evCharging?.value !== null;
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 800 ${isEv ? 480 : 400}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Energy flow diagram showing solar, battery, grid, and household connections');
+
+  const defs = document.createElementNS(svgNS, 'defs');
+
+  // Arrow markers
+  const colors = {
+    solar: '#10b981', grid: '#f97316', battery: '#06b6d4', house: '#3b82f6', ev: '#8b5cf6'
+  };
+
+  Object.entries(colors).forEach(([name, color]) => {
+    const marker = document.createElementNS(svgNS, 'marker');
+    marker.setAttribute('id', `arrow-${name}`);
+    marker.setAttribute('markerWidth', '10');
+    marker.setAttribute('markerHeight', '7');
+    marker.setAttribute('refX', '9');
+    marker.setAttribute('refY', '3.5');
+    marker.setAttribute('orient', 'auto');
+    const polygon = document.createElementNS(svgNS, 'polygon');
+    polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
+    polygon.setAttribute('fill', color);
+    marker.appendChild(polygon);
+    defs.appendChild(marker);
+  });
+
+  svg.appendChild(defs);
+
+  // Node positions
+  const W = 800, H = isEv ? 480 : 400;
+  const nodeW = 120, nodeH = 70;
+  const nodes = {
+    solar:   { x: W/2 - nodeW/2, y: 20,          label: t.solar,   color: colors.solar,   type: 'solar' },
+    battery: { x: 20,            y: H/2 - nodeH/2, label: t.battery, color: colors.battery, type: 'battery' },
+    grid:    { x: W - nodeW - 20, y: H/2 - nodeH/2, label: t.grid,    color: colors.grid,    type: 'grid' },
+    house:   { x: W/2 - nodeW/2, y: H - nodeH - 20, label: t.house,   color: colors.house,   type: 'house' },
+  };
+
+  if (isEv) {
+    nodes.ev = { x: W/2 - nodeW/2 + 160, y: H - nodeH - 20, label: t.ev, color: colors.ev, type: 'ev' };
+  }
+
+  // Draw connection lines
+  const connections = [
+    { from: 'solar', to: 'house', flow: flows.solarToHouse, color: colors.solar },
+    { from: 'solar', to: 'battery', flow: flows.solarToBattery, color: colors.solar },
+    { from: 'solar', to: 'grid', flow: flows.solarToGrid, color: colors.solar },
+    { from: 'battery', to: 'house', flow: flows.batteryToHouse, color: colors.battery },
+    { from: 'battery', to: 'grid', flow: flows.batteryToGrid, color: colors.battery },
+    { from: 'grid', to: 'house', flow: flows.gridToHouse, color: colors.grid },
+    { from: 'grid', to: 'battery', flow: flows.gridToBattery, color: colors.grid },
+  ];
+
+  if (isEv) {
+    connections.push(
+      { from: 'solar', to: 'ev', flow: flows.solarToEv, color: colors.solar },
+      { from: 'grid', to: 'ev', flow: flows.gridToEv, color: colors.grid },
+      { from: 'battery', to: 'ev', flow: flows.batteryToEv, color: colors.battery },
+    );
+  }
+
+  connections.forEach(({ from, to, flow, color }) => {
+    if (!nodes[from] || !nodes[to]) return;
+    const active = flow?.value && flow.value > 10;
+    const fN = nodes[from];
+    const tN = nodes[to];
+
+    const x1 = fN.x + nodeW / 2;
+    const y1 = fN.y + nodeH / 2;
+    const x2 = tN.x + nodeW / 2;
+    const y2 = tN.y + nodeH / 2;
+
+    const path = document.createElementNS(svgNS, 'path');
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    path.setAttribute('d', `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`);
+    path.setAttribute('stroke', color);
+    path.setAttribute('class', active ? 'flow-line active' : 'flow-line inactive');
+    if (active) {
+      path.setAttribute('stroke-dasharray', '12 6');
+      path.setAttribute('marker-end', `url(#arrow-${from})`);
+    }
+
+    svg.appendChild(path);
+
+    // Flow label
+    if (active && flow?.value) {
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', String(mx));
+      label.setAttribute('y', String(my - 8));
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('fill', color);
+      label.setAttribute('font-size', '11');
+      label.setAttribute('font-family', 'inherit');
+      label.textContent = fmtW(flow.value);
+      svg.appendChild(label);
+    }
+  });
+
+  // Draw nodes
+  Object.values(nodes).forEach(({ x, y, label, color, type }) => {
+    const g = document.createElementNS(svgNS, 'g');
+    g.setAttribute('class', 'flow-node');
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+    g.setAttribute('role', 'figure');
+    g.setAttribute('aria-label', label);
+
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('width', String(nodeW));
+    rect.setAttribute('height', String(nodeH));
+    rect.setAttribute('rx', '10');
+    rect.setAttribute('fill', '#1a2235');
+    rect.setAttribute('stroke', color);
+    rect.setAttribute('stroke-width', '2');
+    g.appendChild(rect);
+
+    const colorBar = document.createElementNS(svgNS, 'rect');
+    colorBar.setAttribute('width', String(nodeW));
+    colorBar.setAttribute('height', '4');
+    colorBar.setAttribute('rx', '2');
+    colorBar.setAttribute('fill', color);
+    g.appendChild(colorBar);
+
+    const titleText = document.createElementNS(svgNS, 'text');
+    titleText.setAttribute('x', String(nodeW / 2));
+    titleText.setAttribute('y', '22');
+    titleText.setAttribute('class', 'node-label');
+    titleText.setAttribute('fill', color);
+    titleText.textContent = label;
+    g.appendChild(titleText);
+
+    // Power value
+    let powerVal = '';
+    let subVal = '';
+
+    if (type === 'solar') {
+      powerVal = fmtW(snapshot?.power?.solar?.value);
+    } else if (type === 'battery') {
+      const batt = snapshot?.power?.battery;
+      const soc = snapshot?.power?.batterySoc;
+      const status = snapshot?.power?.batteryStatus;
+      const statusLabel = status ? t[status] || status : '';
+      powerVal = fmtW(batt?.value);
+      subVal = `SoC: ${fmtPct(soc?.value)} · ${statusLabel}`;
+    } else if (type === 'grid') {
+      const gv = snapshot?.power?.grid?.value;
+      powerVal = fmtW(Math.abs(gv ?? 0)) + (gv < 0 ? ' ↑' : ' ↓');
+    } else if (type === 'house') {
+      powerVal = fmtW(snapshot?.power?.house?.value);
+    } else if (type === 'ev') {
+      powerVal = fmtW(snapshot?.power?.evCharging?.value);
+      subVal = t[snapshot?.power?.evStatus] || '';
+    }
+
+    const pText = document.createElementNS(svgNS, 'text');
+    pText.setAttribute('x', String(nodeW / 2));
+    pText.setAttribute('y', subVal ? '40' : '46');
+    pText.setAttribute('class', 'node-power');
+    pText.setAttribute('fill', '#e2e8f0');
+    pText.textContent = powerVal;
+    g.appendChild(pText);
+
+    if (subVal) {
+      const sText = document.createElementNS(svgNS, 'text');
+      sText.setAttribute('x', String(nodeW / 2));
+      sText.setAttribute('y', '56');
+      sText.setAttribute('class', 'node-sub');
+      sText.textContent = subVal;
+      g.appendChild(sText);
+    }
+
+    svg.appendChild(g);
+  });
+
+  // Flow estimation notice
+  if (flows.flowsEstimated) {
+    const note = document.createElementNS(svgNS, 'text');
+    note.setAttribute('x', '4');
+    note.setAttribute('y', String(H - 6));
+    note.setAttribute('fill', '#94a3b8');
+    note.setAttribute('font-size', '10');
+    note.setAttribute('font-family', 'inherit');
+    note.textContent = `~ ${t.flowsEstimated}`;
+    svg.appendChild(note);
+  }
+
+  section.appendChild(svg);
+  return section;
+}
+
+// ===== Energy section =====
+function buildEnergySection(s) {
+  const section = document.createElement('section');
+  section.className = 'card energy-today-section';
+
+  // Tabs
+  const tabs = document.createElement('div');
+  tabs.className = 'period-tabs';
+  ['today', 'month', 'year'].forEach(period => {
+    const btn = document.createElement('button');
+    btn.className = 'period-tab' + (activePeriod === period ? ' active' : '');
+    btn.textContent = t[period];
+    btn.setAttribute('aria-pressed', activePeriod === period ? 'true' : 'false');
+    btn.addEventListener('click', () => {
+      activePeriod = period;
+      renderAll();
+    });
+    tabs.appendChild(btn);
+  });
+  section.appendChild(tabs);
+
+  const energy = s.energy?.[activePeriod] || {};
+
+  const grid = document.createElement('div');
+  grid.className = 'stats-grid';
+
+  const cards = [
+    { key: 'solar', label: t.generation, value: energy.solar, cls: 'solar', unit: 'kWh', icon: '☀' },
+    { key: 'consumption', label: t.consumption, value: energy.consumption, cls: 'house', unit: 'kWh', icon: '⌂' },
+    { key: 'gridImport', label: t.import, value: energy.gridImport, cls: 'grid-import', unit: 'kWh', icon: '↓' },
+    { key: 'gridExport', label: t.export, value: energy.gridExport, cls: 'grid-export', unit: 'kWh', icon: '↑' },
+    { key: 'batteryCharge', label: t.batteryCharge, value: energy.batteryCharge, cls: 'battery', unit: 'kWh', icon: '⚡' },
+    { key: 'batteryDischarge', label: t.batteryDischarge, value: energy.batteryDischarge, cls: 'battery', unit: 'kWh', icon: '⚡' },
+  ];
+
+  if (s.power?.evStatus !== 'unavailable') {
+    cards.push({ key: 'evCharging', label: t.evCharging, value: energy.evCharging, cls: 'ev', unit: 'kWh', icon: '🔌' });
+  }
+
+  cards.forEach(({ label, value, cls, unit, icon }) => {
+    const card = document.createElement('div');
+    card.className = `stat-card ${cls}`;
+    const v = value?.value;
+    const quality = qualityBadge(value);
+    card.innerHTML = `
+      <div class="stat-label">${escapeHtml(icon)} ${escapeHtml(label)}</div>
+      <div class="stat-value">${v !== null && v !== undefined ? v.toFixed(2) : '–'}</div>
+      <div class="stat-unit">${escapeHtml(unit)}</div>
+      ${quality}
+    `;
+    grid.appendChild(card);
+  });
+
+  section.appendChild(grid);
+  return section;
+}
+
+// ===== Power chart section =====
+function buildChartSection() {
+  const section = document.createElement('section');
+  section.className = 'card chart-section';
+
+  const title = document.createElement('div');
+  title.className = 'card-title';
+  title.textContent = t.powerHistory;
+  section.appendChild(title);
+
+  // Legend
+  const legend = document.createElement('div');
+  legend.className = 'legend';
+  const series = [
+    { key: 'solar', label: t.solar, color: '#10b981' },
+    { key: 'house', label: t.house, color: '#3b82f6' },
+    { key: 'battery', label: t.battery, color: '#06b6d4' },
+    { key: 'grid', label: t.grid, color: '#f97316' },
+    { key: 'ev', label: t.ev, color: '#8b5cf6' },
+  ];
+
+  series.forEach(({ key, label, color }) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item' + (activeChartSeries[key] ? ' active' : '');
+    item.innerHTML = `<span class="legend-dot" style="background:${color}"></span>${escapeHtml(label)}`;
+    item.addEventListener('click', () => {
+      activeChartSeries[key] = !activeChartSeries[key];
+      renderPowerChart();
+      item.classList.toggle('active');
+    });
+    legend.appendChild(item);
+  });
+  section.appendChild(legend);
+
+  const container = document.createElement('div');
+  container.className = 'chart-container tall';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'powerChart';
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', t.powerHistory);
+  container.appendChild(canvas);
+  section.appendChild(container);
+
+  return section;
+}
+
+function renderPowerChart() {
+  const canvas = document.getElementById('powerChart');
+  if (!canvas) return;
+
+  const labels = powerHistory.map(p => {
+    const d = new Date(p.ts);
+    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  });
+
+  const datasets = [];
+  const seriesDef = [
+    { key: 'solar', label: t.solar, color: '#10b981', field: 'solar' },
+    { key: 'house', label: t.house, color: '#3b82f6', field: 'house' },
+    { key: 'battery', label: t.battery, color: '#06b6d4', field: 'battery' },
+    { key: 'grid', label: t.grid, color: '#f97316', field: 'grid' },
+    { key: 'ev', label: t.ev, color: '#8b5cf6', field: 'ev' },
+  ];
+
+  seriesDef.forEach(({ key, label, color, field }) => {
+    if (!activeChartSeries[key]) return;
+    datasets.push({
+      label,
+      data: powerHistory.map(p => p[field] !== null ? p[field] / 1000 : null),
+      borderColor: color,
+      backgroundColor: color + '20',
+      fill: false,
+      tension: 0.3,
+      pointRadius: 0,
+      borderWidth: 2,
+      spanGaps: false,
+    });
+  });
+
+  if (powerChart) { powerChart.destroy(); powerChart = null; }
+
+  if (typeof Chart === 'undefined') return;
+
+  powerChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+      scales: {
+        x: { ticks: { color: '#64748b', maxTicksLimit: 12 }, grid: { color: '#2a3a52' } },
+        y: { ticks: { color: '#64748b', callback: v => v + ' kW' }, grid: { color: '#2a3a52' } },
+      },
+    },
+  });
+}
+
+// ===== Daily bars section =====
+function buildDailyBarsSection() {
+  const section = document.createElement('section');
+  section.className = 'card chart-section-half';
+
+  const title = document.createElement('div');
+  title.className = 'card-title';
+  title.textContent = t.dailySolar;
+  section.appendChild(title);
+
+  const container = document.createElement('div');
+  container.className = 'chart-container';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'barChart';
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', t.dailySolar);
+  container.appendChild(canvas);
+  section.appendChild(container);
+  return section;
+}
+
+function renderBarChart() {
+  const canvas = document.getElementById('barChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const recent = dailyBars.slice(-30);
+  const labels = recent.map(b => b.date.substring(5));
+  const data = recent.map(b => b.kWh);
+  const colors = recent.map(b => b.complete ? '#10b981' : '#10b98180');
+
+  if (barChart) { barChart.destroy(); barChart = null; }
+
+  barChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'kWh',
+        data,
+        backgroundColor: colors,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#64748b', maxTicksLimit: 10 }, grid: { color: '#2a3a52' } },
+        y: { ticks: { color: '#64748b', callback: v => v + ' kWh' }, grid: { color: '#2a3a52' } },
+      },
+    },
+  });
+}
+
+// ===== Meters section =====
+function buildMetersSection(s) {
+  const section = document.createElement('section');
+  section.className = 'card';
+
+  const title = document.createElement('div');
+  title.className = 'card-title';
+  title.textContent = t.meters;
+  section.appendChild(title);
+
+  const grid = document.createElement('div');
+  grid.className = 'meter-grid';
+
+  const meters = s.meters || {};
+  const meterItems = [
+    { label: t.gridImportMeter, value: meters.gridImport, unit: 'kWh' },
+    { label: t.gridExportMeter, value: meters.gridExport, unit: 'kWh' },
+  ];
+
+  if (meters.evCharging?.value !== null) {
+    meterItems.push({ label: t.ev + ' Meter', value: meters.evCharging, unit: 'kWh' });
+  }
+
+  meterItems.forEach(({ label, value, unit }) => {
+    const v = value?.value;
+    const item = document.createElement('div');
+    item.className = 'meter-item';
+    item.innerHTML = `
+      <div class="meter-label">${escapeHtml(label)}</div>
+      <div class="meter-value">${v !== null && v !== undefined ? v.toFixed(1) : '–'} <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(unit)}</span></div>
+      <div class="meter-source">${escapeHtml(t.sinceTracking)}</div>
+      ${qualityBadge(value)}
+    `;
+    grid.appendChild(item);
+  });
+
+  // Battery SOC
+  const soc = s.power?.batterySoc;
+  if (soc?.value !== null && soc?.value !== undefined) {
+    const socPct = Math.round(soc.value);
+    const item = document.createElement('div');
+    item.className = 'meter-item';
+    const socClass = socPct < 20 ? 'low' : socPct < 50 ? 'mid' : 'high';
+    item.innerHTML = `
+      <div class="meter-label">${escapeHtml(t.soc)}</div>
+      <div class="meter-value">${escapeHtml(fmtPct(soc.value))}</div>
+      <div class="soc-bar" role="progressbar" aria-valuenow="${socPct}" aria-valuemin="0" aria-valuemax="100">
+        <div class="soc-fill ${escapeHtml(socClass)}" style="width:${socPct}%"></div>
+      </div>
+    `;
+    grid.appendChild(item);
+  }
+
+  section.appendChild(grid);
+  return section;
+}
+
+// ===== Statistics section =====
+function buildStatsSection(s) {
+  const section = document.createElement('section');
+  section.className = 'card';
+
+  const title = document.createElement('div');
+  title.className = 'card-title';
+  title.textContent = t.statistics;
+  section.appendChild(title);
+
+  const stats = s.stats || {};
+  const grid = document.createElement('div');
+  grid.className = 'stats-grid';
+
+  const items = [
+    { label: t.highDay, value: stats.highestDayKwh?.value, date: stats.highestDayDate, cls: 'solar' },
+    { label: t.lowDay, value: stats.lowestDayKwh?.value, date: stats.lowestDayDate, cls: 'solar' },
+    { label: t.avgDay, value: stats.averageDayKwh?.value, date: null, cls: 'solar' },
+    { label: t.peakPower + ' kW', value: stats.peakPowerKw?.value, date: stats.peakPowerDate, cls: 'solar' },
+  ];
+
+  const daysInfo = stats.daysIncluded != null
+    ? `${stats.daysIncluded} ${t.daysIncluded}`
+    : '';
+
+  items.forEach(({ label, value, date, cls }) => {
+    const card = document.createElement('div');
+    card.className = `stat-card ${cls}`;
+    card.innerHTML = `
+      <div class="stat-label">${escapeHtml(label)}</div>
+      <div class="stat-value">${value != null ? value.toFixed(2) : '–'}</div>
+      <div class="stat-unit">${date ? escapeHtml(date) : (value != null ? 'kWh/Tag' : '')}</div>
+    `;
+    grid.appendChild(card);
+  });
+
+  section.appendChild(grid);
+
+  if (daysInfo) {
+    const note = document.createElement('p');
+    note.style.cssText = 'font-size:11px;color:var(--text-muted);margin-top:8px;';
+    note.textContent = daysInfo;
+    section.appendChild(note);
+  }
+
+  return section;
+}
+
+// ===== Chart.js loader =====
+function loadChartJs() {
+  return new Promise((resolve, reject) => {
+    if (typeof Chart !== 'undefined') { resolve(); return; }
+    // Chart.js is bundled locally
+    const script = document.createElement('script');
+    script.src = './chart.min.js';
+    script.onload = resolve;
+    script.onerror = () => {
+      // Try CDN fallback for development
+      const s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js';
+      s2.onload = resolve;
+      s2.onerror = reject;
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+// ===== Main init =====
+async function init() {
+  detectInstance();
+  setStatus('', t.connecting);
+
+  try {
+    await loadChartJs();
+  } catch {
+    console.warn('Chart.js not available - charts disabled');
+  }
+
+  // Load demo data if no real connection available
+  await loadData();
+
+  // If still no data after load, try demo mode
+  if (!snapshot) {
+    await loadDemoData();
+  }
+
+  // Periodic refresh
+  setInterval(async () => {
+    await loadData();
+  }, 10000);
+
+  // Load chart data
+  await loadHistoryData();
+
+  setInterval(async () => {
+    await loadHistoryData();
+  }, 60000);
+}
+
+async function loadDemoData() {
+  // Generate client-side demo data if adapter is not reachable
+  const ts = Date.now();
+  snapshot = buildClientDemoSnapshot(ts);
+  renderAll();
+  setStatus('demo', t.demoMode);
+}
+
+async function loadHistoryData() {
+  // In production: request via sendTo; for demo: generate synthetic
+  if (!snapshot?.demo) return;
+
+  const now = Date.now();
+  if (powerHistory.length === 0) {
+    for (let i = 1440; i >= 0; i--) {
+      const t_h = now - i * 60000;
+      const hour = new Date(t_h).getHours() + new Date(t_h).getMinutes() / 60;
+      const solarW = hour >= 6 && hour <= 20 ? Math.max(0, Math.sin((hour - 6) / 14 * Math.PI) * 5000) : 0;
+      powerHistory.push({
+        ts: t_h,
+        solar: solarW + (Math.random() - 0.5) * 200,
+        house: 1500 + Math.random() * 1000,
+        battery: solarW > 2000 ? -(solarW - 2500) : solarW < 500 && hour < 20 ? 1000 : 0,
+        grid: Math.random() > 0.7 ? -500 : 300,
+        ev: null,
+      });
+    }
+  }
+
+  if (dailyBars.length === 0) {
+    for (let i = 30; i >= 1; i--) {
+      const d = new Date(now - i * 86400000);
+      dailyBars.push({
+        date: d.toISOString().substring(0, 10),
+        kWh: 5 + Math.random() * 30,
+        complete: true,
+      });
+    }
+  }
+
+  renderPowerChart();
+  renderBarChart();
+}
+
+function buildClientDemoSnapshot(ts) {
+  const solarW = (() => {
+    const h = new Date(ts).getHours() + new Date(ts).getMinutes() / 60;
+    return h >= 6 && h <= 20 ? Math.max(0, Math.sin((h - 6) / 14 * Math.PI) * 5000) : 0;
+  })();
+
+  const makeVal = (v, prov = 'measured') => ({
+    value: v,
+    quality: { provenance: prov, availability: v !== null ? 'available' : 'unavailable', freshness: 'current', timestamp: ts }
+  });
+  const calcVal = (v) => makeVal(v, 'calculated');
+  const estVal = (v) => makeVal(v, 'estimated');
+
+  return {
+    demo: true,
+    ts,
+    power: {
+      solar: makeVal(Math.round(solarW)),
+      battery: makeVal(solarW > 3000 ? -800 : 500),
+      grid: makeVal(solarW > 4000 ? -1000 : 500),
+      house: makeVal(Math.round(2500 + Math.random() * 500)),
+      houseCalculated: calcVal(2500),
+      balanceDiscrepancyW: calcVal(15),
+      evCharging: makeVal(0),
+      siteConsumption: calcVal(2500),
+      houseExcludingEv: calcVal(2500),
+      batterySoc: makeVal(65),
+      batteryStatus: solarW > 3000 ? 'charging' : 'discharging',
+      evStatus: 'idle',
+    },
+    flows: {
+      solarToHouse: estVal(Math.min(solarW, 2500)),
+      solarToBattery: estVal(Math.max(0, solarW - 2500)),
+      solarToGrid: estVal(0),
+      batteryToHouse: estVal(solarW < 2000 ? 500 : 0),
+      batteryToGrid: estVal(0),
+      gridToHouse: estVal(solarW < 2000 ? 500 : 0),
+      gridToBattery: estVal(0),
+      solarToEv: estVal(0),
+      gridToEv: estVal(0),
+      batteryToEv: estVal(0),
+      flowsEstimated: true,
+    },
+    energy: {
+      today: {
+        solar: calcVal(solarW > 0 ? 12.5 : 0),
+        consumption: calcVal(8.3),
+        gridImport: calcVal(1.2),
+        gridExport: calcVal(5.1),
+        batteryCharge: calcVal(3.2),
+        batteryDischarge: calcVal(2.8),
+        evCharging: calcVal(0),
+      },
+      month: {
+        solar: calcVal(287.3),
+        consumption: calcVal(189.4),
+        gridImport: calcVal(38.5),
+        gridExport: calcVal(136.4),
+        batteryCharge: calcVal(54.2),
+        batteryDischarge: calcVal(49.8),
+        evCharging: calcVal(0),
+      },
+      year: {
+        solar: calcVal(2847.3),
+        consumption: calcVal(1923.4),
+        gridImport: calcVal(412.1),
+        gridExport: calcVal(1336.0),
+        batteryCharge: calcVal(587.4),
+        batteryDischarge: calcVal(541.2),
+        evCharging: calcVal(0),
+      },
+      total: {},
+    },
+    meters: {
+      gridImport: makeVal(12345.6),
+      gridExport: makeVal(8765.4),
+      solar: makeVal(45678.9),
+      consumption: makeVal(23456.7),
+      evCharging: { value: null, quality: { provenance: 'measured', availability: 'unavailable', freshness: 'current', timestamp: ts } },
+    },
+    stats: {
+      highestDayKwh: calcVal(35.2),
+      highestDayDate: '2025-07-15',
+      lowestDayKwh: calcVal(0.8),
+      lowestDayDate: '2025-12-21',
+      averageDayKwh: calcVal(12.1),
+      peakPowerKw: calcVal(8.7),
+      peakPowerDate: '2025-07-15',
+      peakPowerTime: '13:24',
+      daysIncluded: 245,
+      daysExcluded: 12,
+    },
+  };
+}
+
+// Start
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

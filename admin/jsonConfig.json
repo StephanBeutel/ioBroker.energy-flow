@@ -1,0 +1,398 @@
+{
+  "i18n": true,
+  "type": "tabs",
+  "items": {
+    "tab_general": {
+      "type": "panel",
+      "label": "tab_general",
+      "items": {
+        "timezone": {
+          "type": "select",
+          "label": "timezone",
+          "options": [
+            { "value": "Europe/Berlin", "label": "Europe/Berlin" },
+            { "value": "Europe/Vienna", "label": "Europe/Vienna" },
+            { "value": "Europe/Zurich", "label": "Europe/Zurich" },
+            { "value": "Europe/London", "label": "Europe/London" },
+            { "value": "America/New_York", "label": "America/New_York" },
+            { "value": "America/Los_Angeles", "label": "America/Los_Angeles" },
+            { "value": "Asia/Tokyo", "label": "Asia/Tokyo" }
+          ],
+          "default": "Europe/Berlin",
+          "help": "timezone_help",
+          "newLine": true,
+          "xs": 12, "sm": 6, "md": 4, "lg": 4
+        }
+      }
+    },
+    "tab_solar": {
+      "type": "panel",
+      "label": "tab_solar",
+      "items": {
+        "solar.sources": {
+          "type": "table",
+          "label": "solar_sources",
+          "help": "solar_sources_help",
+          "newLine": true,
+          "xs": 12,
+          "items": [
+            { "attr": "id", "type": "text", "title": "source_id", "width": "10%" },
+            { "attr": "name", "type": "text", "title": "source_name", "width": "15%" },
+            { "attr": "objectId", "type": "objectId", "title": "power_object", "width": "20%" },
+            { "attr": "unit", "type": "select", "title": "unit", "width": "8%", "options": [{ "value": "W", "label": "W" }, { "value": "kW", "label": "kW" }] },
+            { "attr": "factor", "type": "number", "title": "factor", "width": "8%", "default": 1 },
+            { "attr": "invert", "type": "checkbox", "title": "invert", "width": "7%" },
+            { "attr": "maxAgeSeconds", "type": "number", "title": "max_age_s", "width": "10%", "default": 300 },
+            { "attr": "energyObjectId", "type": "objectId", "title": "energy_object", "width": "15%" },
+            { "attr": "energyUnit", "type": "select", "title": "energy_unit", "width": "7%", "options": [{ "value": "Wh", "label": "Wh" }, { "value": "kWh", "label": "kWh" }] }
+          ]
+        }
+      }
+    },
+    "tab_battery": {
+      "type": "panel",
+      "label": "tab_battery",
+      "items": {
+        "battery.enabled": {
+          "type": "checkbox",
+          "label": "battery_enabled",
+          "newLine": true,
+          "xs": 12
+        },
+        "battery.powerObjectId": {
+          "type": "objectId",
+          "label": "battery_power_object",
+          "help": "battery_power_help",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.powerUnit": {
+          "type": "select",
+          "label": "unit",
+          "options": [{ "value": "W", "label": "W" }, { "value": "kW", "label": "kW" }],
+          "default": "W",
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.powerFactor": {
+          "type": "number",
+          "label": "factor",
+          "default": 1,
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.powerInvert": {
+          "type": "checkbox",
+          "label": "invert",
+          "help": "battery_invert_help",
+          "newLine": true,
+          "xs": 12,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.socObjectId": {
+          "type": "objectId",
+          "label": "battery_soc_object",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.maxAgeSeconds": {
+          "type": "number",
+          "label": "max_age_s",
+          "default": 300,
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.gridChargingEnabled": {
+          "type": "checkbox",
+          "label": "battery_grid_charging",
+          "help": "battery_grid_charging_help",
+          "newLine": true,
+          "xs": 12,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.gridExportEnabled": {
+          "type": "checkbox",
+          "label": "battery_grid_export",
+          "help": "battery_grid_export_help",
+          "newLine": false,
+          "xs": 12,
+          "hidden": "!data.battery.enabled"
+        }
+      }
+    },
+    "tab_grid": {
+      "type": "panel",
+      "label": "tab_grid",
+      "items": {
+        "grid_info": {
+          "type": "staticText",
+          "text": "grid_sign_convention_info",
+          "newLine": true,
+          "xs": 12
+        },
+        "grid.powerObjectId": {
+          "type": "objectId",
+          "label": "grid_power_object",
+          "help": "grid_power_help",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6
+        },
+        "grid.powerUnit": {
+          "type": "select",
+          "label": "unit",
+          "options": [{ "value": "W", "label": "W" }, { "value": "kW", "label": "kW" }],
+          "default": "W",
+          "xs": 12, "sm": 4, "md": 2
+        },
+        "grid.powerFactor": {
+          "type": "number",
+          "label": "factor",
+          "default": 1,
+          "xs": 12, "sm": 4, "md": 2
+        },
+        "grid.powerInvert": {
+          "type": "checkbox",
+          "label": "invert",
+          "help": "grid_invert_help",
+          "newLine": true,
+          "xs": 12
+        },
+        "grid.maxAgeSeconds": {
+          "type": "number",
+          "label": "max_age_s",
+          "default": 300,
+          "xs": 12, "sm": 4, "md": 2
+        },
+        "grid.importMeterObjectId": {
+          "type": "objectId",
+          "label": "grid_import_meter",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6
+        },
+        "grid.importMeterUnit": {
+          "type": "select",
+          "label": "energy_unit",
+          "options": [{ "value": "Wh", "label": "Wh" }, { "value": "kWh", "label": "kWh" }],
+          "default": "kWh",
+          "xs": 12, "sm": 4, "md": 2
+        },
+        "grid.exportMeterObjectId": {
+          "type": "objectId",
+          "label": "grid_export_meter",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6
+        },
+        "grid.exportMeterUnit": {
+          "type": "select",
+          "label": "energy_unit",
+          "options": [{ "value": "Wh", "label": "Wh" }, { "value": "kWh", "label": "kWh" }],
+          "default": "kWh",
+          "xs": 12, "sm": 4, "md": 2
+        }
+      }
+    },
+    "tab_house": {
+      "type": "panel",
+      "label": "tab_house",
+      "items": {
+        "house.powerObjectId": {
+          "type": "objectId",
+          "label": "house_power_object",
+          "help": "house_power_help",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6
+        },
+        "house.powerUnit": {
+          "type": "select",
+          "label": "unit",
+          "options": [{ "value": "W", "label": "W" }, { "value": "kW", "label": "kW" }],
+          "default": "W",
+          "xs": 12, "sm": 4, "md": 2
+        },
+        "house.powerFactor": {
+          "type": "number",
+          "label": "factor",
+          "default": 1,
+          "xs": 12, "sm": 4, "md": 2
+        },
+        "house.maxAgeSeconds": {
+          "type": "number",
+          "label": "max_age_s",
+          "default": 300,
+          "xs": 12, "sm": 4, "md": 2
+        },
+        "house.balanceToleranceW": {
+          "type": "number",
+          "label": "balance_tolerance_w",
+          "help": "balance_tolerance_help",
+          "default": 100,
+          "newLine": true,
+          "xs": 12, "sm": 4, "md": 3
+        },
+        "house.consumptionMeterObjectId": {
+          "type": "objectId",
+          "label": "house_consumption_meter",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6
+        },
+        "house.consumptionMeterUnit": {
+          "type": "select",
+          "label": "energy_unit",
+          "options": [{ "value": "Wh", "label": "Wh" }, { "value": "kWh", "label": "kWh" }],
+          "default": "kWh",
+          "xs": 12, "sm": 4, "md": 2
+        }
+      }
+    },
+    "tab_ev": {
+      "type": "panel",
+      "label": "tab_ev",
+      "items": {
+        "ev.enabled": {
+          "type": "checkbox",
+          "label": "ev_enabled",
+          "newLine": true,
+          "xs": 12
+        },
+        "ev.powerObjectId": {
+          "type": "objectId",
+          "label": "ev_power_object",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.powerUnit": {
+          "type": "select",
+          "label": "unit",
+          "options": [{ "value": "W", "label": "W" }, { "value": "kW", "label": "kW" }],
+          "default": "W",
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.powerFactor": {
+          "type": "number",
+          "label": "factor",
+          "default": 1,
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.maxAgeSeconds": {
+          "type": "number",
+          "label": "max_age_s",
+          "default": 300,
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.chargingMeterObjectId": {
+          "type": "objectId",
+          "label": "ev_charging_meter",
+          "help": "ev_charging_meter_help",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.chargingMeterUnit": {
+          "type": "select",
+          "label": "energy_unit",
+          "options": [{ "value": "Wh", "label": "Wh" }, { "value": "kWh", "label": "kWh" }],
+          "default": "kWh",
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.chargingThresholdW": {
+          "type": "number",
+          "label": "ev_threshold_w",
+          "help": "ev_threshold_help",
+          "default": 100,
+          "newLine": true,
+          "xs": 12, "sm": 4, "md": 3,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.chargingHysteresisW": {
+          "type": "number",
+          "label": "ev_hysteresis_w",
+          "default": 50,
+          "xs": 12, "sm": 4, "md": 3,
+          "hidden": "!data.ev.enabled"
+        },
+        "ev.includedInHousehold": {
+          "type": "checkbox",
+          "label": "ev_included_in_household",
+          "help": "ev_included_help",
+          "newLine": true,
+          "xs": 12,
+          "hidden": "!data.ev.enabled"
+        }
+      }
+    },
+    "tab_history": {
+      "type": "panel",
+      "label": "tab_history",
+      "items": {
+        "history.detailRetentionDays": {
+          "type": "number",
+          "label": "history_detail_days",
+          "help": "history_detail_help",
+          "default": 30,
+          "newLine": true,
+          "xs": 12, "sm": 6, "md": 4
+        },
+        "history.dailyRetentionYears": {
+          "type": "number",
+          "label": "history_daily_years",
+          "default": 10,
+          "xs": 12, "sm": 6, "md": 4
+        }
+      }
+    },
+    "tab_dashboard": {
+      "type": "panel",
+      "label": "tab_dashboard",
+      "items": {
+        "dashboard.updateIntervalSeconds": {
+          "type": "number",
+          "label": "dashboard_interval_s",
+          "default": 10,
+          "newLine": true,
+          "xs": 12, "sm": 6, "md": 4
+        },
+        "dashboard.chartHistoryHours": {
+          "type": "number",
+          "label": "dashboard_chart_hours",
+          "default": 24,
+          "xs": 12, "sm": 6, "md": 4
+        },
+        "dashboard_open": {
+          "type": "staticLink",
+          "label": "open_dashboard",
+          "href": "/energy-flow/",
+          "newLine": true,
+          "xs": 12
+        }
+      }
+    },
+    "tab_diagnostics": {
+      "type": "panel",
+      "label": "tab_diagnostics",
+      "items": {
+        "diag_info": {
+          "type": "staticText",
+          "text": "diag_info_text",
+          "newLine": true,
+          "xs": 12
+        }
+      }
+    }
+  }
+}

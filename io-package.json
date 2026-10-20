@@ -1,0 +1,152 @@
+{
+  "common": {
+    "name": "energy-flow",
+    "version": "0.1.0",
+    "news": {
+      "0.1.0": {
+        "en": "Initial release",
+        "de": "Erstveröffentlichung"
+      }
+    },
+    "titleLang": {
+      "en": "Energy Flow",
+      "de": "Energy Flow"
+    },
+    "desc": {
+      "en": "Energy monitoring adapter with responsive dashboard for solar, battery, grid and EV charging",
+      "de": "Energiemonitor-Adapter mit responsivem Dashboard für Solar, Batterie, Netz und EV-Laden"
+    },
+    "authors": [
+      "Energy Flow Adapter <info@example.com>"
+    ],
+    "keywords": [
+      "energy",
+      "solar",
+      "battery",
+      "grid",
+      "dashboard",
+      "EV",
+      "photovoltaic"
+    ],
+    "licenseInformation": {
+      "type": "free",
+      "license": "MIT"
+    },
+    "platform": "Javascript/Node.js",
+    "icon": "energy-flow.png",
+    "enabled": true,
+    "extIcon": "https://raw.githubusercontent.com/example/ioBroker.energy-flow/main/admin/energy-flow.png",
+    "readme": "https://github.com/example/ioBroker.energy-flow/blob/main/README.md",
+    "loglevel": "info",
+    "tier": 3,
+    "mode": "daemon",
+    "type": "general",
+    "compact": true,
+    "adminUI": {
+      "config": "json"
+    },
+    "supportCustoms": false,
+    "dependencies": [
+      {
+        "js-controller": ">=6.0.11"
+      }
+    ],
+    "globalDependencies": [
+      {
+        "admin": ">=7.0.23"
+      },
+      {
+        "web": ">=6.0.0"
+      }
+    ],
+    "messagebox": true
+  },
+  "native": {
+    "timezone": "Europe/Berlin",
+    "solar": {
+      "sources": []
+    },
+    "battery": {
+      "enabled": false,
+      "powerObjectId": "",
+      "powerUnit": "W",
+      "powerFactor": 1,
+      "powerInvert": false,
+      "socObjectId": "",
+      "socUnit": "%",
+      "maxAgeSeconds": 300,
+      "gridChargingEnabled": true,
+      "gridExportEnabled": true,
+      "chargingObjectId": "",
+      "dischargingObjectId": "",
+      "energyChargingObjectId": "",
+      "energyDischargingObjectId": ""
+    },
+    "grid": {
+      "powerObjectId": "",
+      "powerUnit": "W",
+      "powerFactor": 1,
+      "powerInvert": false,
+      "importObjectId": "",
+      "exportObjectId": "",
+      "maxAgeSeconds": 300,
+      "importMeterObjectId": "",
+      "exportMeterObjectId": "",
+      "importMeterUnit": "kWh",
+      "exportMeterUnit": "kWh"
+    },
+    "house": {
+      "powerObjectId": "",
+      "powerUnit": "W",
+      "powerFactor": 1,
+      "maxAgeSeconds": 300,
+      "consumptionMeterObjectId": "",
+      "consumptionMeterUnit": "kWh",
+      "balanceToleranceW": 100
+    },
+    "ev": {
+      "enabled": false,
+      "powerObjectId": "",
+      "powerUnit": "W",
+      "powerFactor": 1,
+      "maxAgeSeconds": 300,
+      "chargingMeterObjectId": "",
+      "chargingMeterUnit": "kWh",
+      "chargingThresholdW": 100,
+      "chargingHysteresisW": 50,
+      "includedInHousehold": true
+    },
+    "history": {
+      "detailRetentionDays": 30,
+      "dailyRetentionYears": 10
+    },
+    "dashboard": {
+      "updateIntervalSeconds": 10,
+      "chartHistoryHours": 24
+    }
+  },
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "info",
+      "type": "channel",
+      "common": {
+        "name": "Adapter information"
+      },
+      "native": {}
+    },
+    {
+      "_id": "info.connection",
+      "type": "state",
+      "common": {
+        "name": "Connection status",
+        "type": "boolean",
+        "role": "indicator.connected",
+        "read": true,
+        "write": false,
+        "def": false
+      },
+      "native": {}
+    }
+  ]
+}
