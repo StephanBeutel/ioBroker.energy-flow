@@ -75,9 +75,10 @@ class EnergyFlowAdapter extends utils.Adapter {
         this.on("unload", this.onUnload.bind(this));
     }
     async uploadWwwFiles() {
-        const wwwDir = path.join(__dirname, "..", "www");
+        const wwwDir = path.join(__dirname, "www");
         if (!fs.existsSync(wwwDir))
             return;
+        const namespace = `${ADAPTER_NAME}.${this.instance}`;
         const files = fs.readdirSync(wwwDir);
         for (const file of files) {
             const filePath = path.join(wwwDir, file);
@@ -85,7 +86,7 @@ class EnergyFlowAdapter extends utils.Adapter {
                 continue;
             try {
                 const content = fs.readFileSync(filePath);
-                await this.writeFileAsync(ADAPTER_NAME, file, content);
+                await this.writeFileAsync(namespace, file, content);
             }
             catch (e) {
                 this.log.warn(`Could not upload www/${file}: ${e}`);
