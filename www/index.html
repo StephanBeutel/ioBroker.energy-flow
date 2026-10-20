@@ -658,27 +658,34 @@ function detectInstance() {
   if (m) instanceId = parseInt(m[1], 10);
 }
 
-function connectSocket() {
-  return new Promise((resolve) => {
-    if (typeof io === 'undefined') { resolve(false); return; }
-    try {
-      socket = io(window.location.origin, { path: '/socket.io', transports: ['websocket', 'polling'] });
-      socket.on('connect', () => { resolve(true); });
-      socket.on('connect_error', () => { resolve(false); });
-      setTimeout(() => resolve(false), 3000);
-    } catch (e) {
-      resolve(false);
-    }
+function initSocket() {
+  if (typeof io === 'undefined') return;
+  socket = io(window.location.origin, {
+    path: '/socket.io',
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionDelay: 2000,
+    reconnectionAttempts: Infinity,
+  });
+  socket.on('connect', () => {
+    setStatus('live', t.connected);
+    loadData();
+  });
+  socket.on('disconnect', () => {
+    setStatus('error', t.disconnected);
+  });
+  socket.on('connect_error', () => {
+    setStatus('error', t.disconnected);
   });
 }
 
 function sendToAdapter(command, message) {
   return new Promise((resolve) => {
     if (!socket?.connected) { resolve(null); return; }
-    socket.emit('sendTo', `energy-flow.${instanceId}`, command, message || {}, (data) => {
-      resolve(data ?? null);
-    });
-    setTimeout(() => resolve(null), 5000);
+    let settled = false;
+    const done = (val) => { if (!settled) { settled = true; resolve(val ?? null); } };
+    socket.emit('sendTo', `energy-flow.${instanceId}`, command, message || {}, done);
+    setTimeout(() => done(null), 5000);
   });
 }
 
@@ -689,24 +696,9 @@ async function loadData() {
       snapshot = data;
       setStatus('live', t.connected);
       renderAll();
-    } else {
-      setStatus('error', t.disconnected);
     }
   } catch (err) {
     console.error('Data load error:', err);
-    setStatus('error', t.disconnected);
-  }
-}
-
-async function loadViaFetch() {
-  try {
-    const resp = await fetch('./api/snapshot');
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    snapshot = await resp.json();
-    setStatus('live', t.connected);
-    renderAll();
-  } catch {
-    setStatus('error', t.disconnected);
   }
 }
 
@@ -1331,24 +1323,20 @@ async function init() {
     console.warn('Chart.js not available - charts disabled');
   }
 
-  const connected = await connectSocket();
+  initSocket();
 
-  // Load data
-  await loadData();
+  // Fallback demo if socket doesn't connect within 5s
+  setTimeout(async () => {
+    if (!snapshot) await loadDemoData();
+  }, 5000);
 
-  // If still no data after load, fall back to demo mode
-  if (!snapshot) {
-    await loadDemoData();
-  }
-
-  // Periodic refresh
-  setInterval(async () => {
-    await loadData();
+  // Periodic refresh every 10s while connected
+  setInterval(() => {
+    if (socket?.connected) loadData();
   }, 10000);
 
-  // Load chart data
+  // Chart data refresh
   await loadHistoryData();
-
   setInterval(async () => {
     await loadHistoryData();
   }, 60000);
