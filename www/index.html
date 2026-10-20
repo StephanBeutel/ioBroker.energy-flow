@@ -512,6 +512,7 @@
 
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
@@ -650,40 +651,46 @@ function escapeHtml(s) {
 
 // ===== ioBroker communication =====
 let instanceId = 0;
+let socket = null;
 
 function detectInstance() {
   const m = window.location.pathname.match(/energy-flow\.(\d+)/);
   if (m) instanceId = parseInt(m[1], 10);
 }
 
-function fetchSnapshot() {
+function connectSocket() {
   return new Promise((resolve) => {
-    if (window.socketcluster) {
-      window.socketcluster.emit('sendTo', {
-        adapterInstance: `energy-flow.${instanceId}`,
-        command: 'getSnapshot',
-        message: {}
-      }, (err, data) => {
-        if (err) { resolve(null); return; }
-        resolve(data);
-      });
-    } else if (window.io) {
-      // socket.io fallback
-      resolve(null);
-    } else {
-      resolve(null);
+    if (typeof io === 'undefined') { resolve(false); return; }
+    try {
+      socket = io(window.location.origin, { path: '/socket.io', transports: ['websocket', 'polling'] });
+      socket.on('connect', () => { resolve(true); });
+      socket.on('connect_error', () => { resolve(false); });
+      setTimeout(() => resolve(false), 3000);
+    } catch (e) {
+      resolve(false);
     }
+  });
+}
+
+function sendToAdapter(command, message) {
+  return new Promise((resolve) => {
+    if (!socket?.connected) { resolve(null); return; }
+    socket.emit('sendTo', `energy-flow.${instanceId}`, command, message || {}, (data) => {
+      resolve(data ?? null);
+    });
+    setTimeout(() => resolve(null), 5000);
   });
 }
 
 async function loadData() {
   try {
-    // Try ioBroker web socket
-    if (typeof window.io !== 'undefined') {
-      await loadViaSocket();
+    const data = await sendToAdapter('getSnapshot', {});
+    if (data) {
+      snapshot = data;
+      setStatus('live', t.connected);
+      renderAll();
     } else {
-      // Fallback: use REST-like fetch via ioBroker web adapter
-      await loadViaFetch();
+      setStatus('error', t.disconnected);
     }
   } catch (err) {
     console.error('Data load error:', err);
@@ -692,8 +699,6 @@ async function loadData() {
 }
 
 async function loadViaFetch() {
-  // Request data via custom ioBroker web endpoint or direct adapter message
-  // In production this is served by the ioBroker web adapter extension
   try {
     const resp = await fetch('./api/snapshot');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -703,21 +708,6 @@ async function loadViaFetch() {
   } catch {
     setStatus('error', t.disconnected);
   }
-}
-
-function loadViaSocket() {
-  return new Promise((resolve) => {
-    // Use ioBroker socket.io if available
-    if (typeof window.servConn !== 'undefined') {
-      window.servConn.sendTo(`energy-flow.${instanceId}`, 'getSnapshot', {}, (data) => {
-        if (data) { snapshot = data; setStatus('live', t.connected); renderAll(); }
-        else setStatus('error', t.disconnected);
-        resolve();
-      });
-    } else {
-      resolve();
-    }
-  });
 }
 
 // ===== Status helpers =====
@@ -795,7 +785,7 @@ function buildFlowSection(s) {
 
   const flows = s.flows || {};
   const p = s.power || {};
-  const isEv = p.evStatus !== 'unavailable' && p.evCharging?.value !== null;
+  const isEv = p.evStatus === 'charging' || (p.evCharging?.value != null && p.evCharging.value > 10);
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
@@ -831,25 +821,26 @@ function buildFlowSection(s) {
   const W = 800, H = isEv ? 480 : 400;
   const nodeW = 120, nodeH = 70;
   const nodes = {
-    solar:   { x: W/2 - nodeW/2, y: 20,          label: t.solar,   color: colors.solar,   type: 'solar' },
+    solar:   { x: W/2 - nodeW/2, y: 20,           label: t.solar,   color: colors.solar,   type: 'solar' },
     battery: { x: 20,            y: H/2 - nodeH/2, label: t.battery, color: colors.battery, type: 'battery' },
-    grid:    { x: W - nodeW - 20, y: H/2 - nodeH/2, label: t.grid,    color: colors.grid,    type: 'grid' },
-    house:   { x: W/2 - nodeW/2, y: H - nodeH - 20, label: t.house,   color: colors.house,   type: 'house' },
+    grid:    { x: W - nodeW - 20, y: H/2 - nodeH/2, label: t.grid,   color: colors.grid,    type: 'grid' },
+    house:   { x: W/2 - nodeW/2, y: H - nodeH - 20, label: t.house,  color: colors.house,   type: 'house' },
   };
 
   if (isEv) {
     nodes.ev = { x: W/2 - nodeW/2 + 160, y: H - nodeH - 20, label: t.ev, color: colors.ev, type: 'ev' };
   }
 
-  // Draw connection lines
+  // Only the connections relevant for this installation:
+  // solar ↔ battery, battery ↔ house, battery ↔ grid, house ↔ grid
+  // Direction driven by which flow value is non-zero
   const connections = [
-    { from: 'solar', to: 'house', flow: flows.solarToHouse, color: colors.solar },
-    { from: 'solar', to: 'battery', flow: flows.solarToBattery, color: colors.solar },
-    { from: 'solar', to: 'grid', flow: flows.solarToGrid, color: colors.solar },
-    { from: 'battery', to: 'house', flow: flows.batteryToHouse, color: colors.battery },
-    { from: 'battery', to: 'grid', flow: flows.batteryToGrid, color: colors.battery },
-    { from: 'grid', to: 'house', flow: flows.gridToHouse, color: colors.grid },
-    { from: 'grid', to: 'battery', flow: flows.gridToBattery, color: colors.grid },
+    { from: 'solar',   to: 'battery', flow: flows.solarToBattery, color: colors.solar },
+    { from: 'battery', to: 'house',   flow: flows.batteryToHouse, color: colors.battery },
+    { from: 'battery', to: 'grid',    flow: flows.batteryToGrid,  color: colors.battery },
+    { from: 'grid',    to: 'battery', flow: flows.gridToBattery,  color: colors.grid },
+    { from: 'grid',    to: 'house',   flow: flows.gridToHouse,    color: colors.grid },
+    { from: 'house',   to: 'grid',    flow: flows.houseToGrid,    color: colors.house },
   ];
 
   if (isEv) {
@@ -1337,10 +1328,12 @@ async function init() {
     console.warn('Chart.js not available - charts disabled');
   }
 
-  // Load demo data if no real connection available
+  const connected = await connectSocket();
+
+  // Load data
   await loadData();
 
-  // If still no data after load, try demo mode
+  // If still no data after load, fall back to demo mode
   if (!snapshot) {
     await loadDemoData();
   }
@@ -1367,9 +1360,18 @@ async function loadDemoData() {
 }
 
 async function loadHistoryData() {
-  // In production: request via sendTo; for demo: generate synthetic
-  if (!snapshot?.demo) return;
+  if (snapshot && !snapshot.demo) {
+    // Real mode: fetch from adapter
+    const hist = await sendToAdapter('getHistory', {});
+    if (hist?.history) powerHistory = hist.history;
+    const bars = await sendToAdapter('getDailyBars', {});
+    if (bars?.bars) dailyBars = bars.bars;
+    renderPowerChart();
+    renderBarChart();
+    return;
+  }
 
+  // Demo: generate synthetic
   const now = Date.now();
   if (powerHistory.length === 0) {
     for (let i = 1440; i >= 0; i--) {
