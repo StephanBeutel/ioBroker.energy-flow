@@ -1,6 +1,6 @@
 {
   "name": "iobroker.energy-flow",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "ioBroker adapter for energy monitoring with responsive dashboard",
   "author": {
     "name": "Energy Flow Adapter",
