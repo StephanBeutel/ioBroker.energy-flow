@@ -1148,6 +1148,7 @@ function buildChartSection() {
 
 function renderPowerChart() {
   const canvas = document.getElementById('powerChart');
+  console.log('[EF] renderPowerChart period=', activePeriod, 'canvas=', !!canvas, 'dailyBars=', dailyBars.length, 'powerHistory=', powerHistory.length);
   if (!canvas || typeof Chart === 'undefined') return;
   if (powerChart) { powerChart.destroy(); powerChart = null; }
 
@@ -1510,7 +1511,9 @@ async function fetchHistoryForPeriod(period) {
     const opts = { instance: hc.sqlInstance, start: from30, end: nowMs, step: 3600_000, aggregate: 'average' };
     const solarPts = await getHistory(hc.solar, opts);
     dailyBars = aggregateToDailyBars(solarPts, hc.solarUnit, nowMs);
+    console.log('[EF] month: dailyBars set, count=', dailyBars.length, 'calling renderPowerChart');
     renderPowerChart();
+    console.log('[EF] month: renderPowerChart done, powerChart=', powerChart);
 
   } else if (period === 'year') {
     // 365 days, daily → monthly aggregation
