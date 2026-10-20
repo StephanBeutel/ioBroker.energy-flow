@@ -1103,6 +1103,16 @@ function buildChartSection() {
   canvas.id = 'powerChart';
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', t.powerHistory);
+  if (activePeriod !== 'today') {
+    // Shown until async history fetch populates the chart
+    canvas.style.cssText = 'display:flex;align-items:center;justify-content:center;';
+    const placeholder = document.createElement('div');
+    placeholder.id = 'chartPlaceholder';
+    placeholder.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-muted);font-size:13px;pointer-events:none;';
+    placeholder.textContent = '…';
+    container.style.position = 'relative';
+    container.appendChild(placeholder);
+  }
   container.appendChild(canvas);
   section.appendChild(container);
 
@@ -1149,7 +1159,10 @@ function renderPowerChart() {
       },
     });
   } else {
-    // Month or year: solar kWh bar chart from dailyBars
+    // Month or year: solar kWh bar chart from dailyBars — skip if not loaded yet
+    if (!dailyBars.length) return;
+    const ph = document.getElementById('chartPlaceholder');
+    if (ph) ph.remove();
     let bars = [];
     if (activePeriod === 'month') {
       // Last 30 days
