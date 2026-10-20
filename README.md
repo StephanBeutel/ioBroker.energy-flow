@@ -42,7 +42,7 @@ Geräte-spezifische abweichende Konventionen können in der Konfiguration per "V
 ### Entwicklungsinstallation
 
 ```bash
-git clone https://github.com/example/ioBroker.energy-flow.git
+git clone https://github.com/StephanBeutel/ioBroker.energy-flow.git
 cd ioBroker.energy-flow
 npm install
 npm run build
