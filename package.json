@@ -37,6 +37,7 @@
     "@iobroker/testing": "^6.2.1",
     "@iobroker/types": "^7.2.5",
     "@tsconfig/node22": "^22.0.6",
+    "chart.js": "^4.5.1",
     "@types/node": "^22.20.2",
     "chai": "^5.2.0",
     "mocha": "^11.1.0",
@@ -58,7 +59,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "prebuild": "rimraf main.js lib",
+    "prebuild": "rimraf main.js lib && cp node_modules/chart.js/dist/chart.umd.min.js www/chart.min.js",
     "build": "tsc -p tsconfig.build.json",
     "watch": "tsc -p tsconfig.build.json --watch",
     "test:ts": "tsc -p tsconfig.build-test.json && mocha --timeout 10000 \"build-test/**/*.test.js\"",
