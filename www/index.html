@@ -663,7 +663,11 @@ function snapshotStateId() {
 }
 
 function initSocket() {
-  if (typeof io === 'undefined') return;
+  if (typeof io === 'undefined') {
+    console.error('[EF] socket.io not loaded — /socket.io/socket.io.js missing?');
+    return;
+  }
+  console.log('[EF] initSocket, origin=', window.location.origin, 'stateId=', snapshotStateId());
   socket = io(window.location.origin, {
     path: '/socket.io',
     transports: ['websocket', 'polling'],
@@ -673,41 +677,43 @@ function initSocket() {
   });
 
   socket.on('connect', () => {
-    // Subscribe so we get pushed updates whenever the state changes
+    console.log('[EF] socket connected, id=', socket.id);
     socket.emit('subscribeStates', snapshotStateId(), (err) => {
-      if (err) console.warn('subscribeStates error:', err);
+      if (err) console.warn('[EF] subscribeStates error:', err);
+      else console.log('[EF] subscribeStates OK for', snapshotStateId());
     });
-    // Also fetch the current value immediately
     loadData();
   });
 
-  // Pushed state change — parse and render directly
   socket.on('stateChange', (id, state) => {
+    console.log('[EF] stateChange', id, state);
     if (id === snapshotStateId() && state?.val) {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
         renderAll();
       } catch (e) {
-        console.warn('Failed to parse snapshot state:', e);
+        console.warn('[EF] Failed to parse snapshot state:', e);
       }
     }
   });
 
-  socket.on('disconnect', () => setStatus('error', t.disconnected));
-  socket.on('connect_error', () => setStatus('error', t.disconnected));
+  socket.on('disconnect', (reason) => { console.warn('[EF] disconnect:', reason); setStatus('error', t.disconnected); });
+  socket.on('connect_error', (err) => { console.error('[EF] connect_error:', err.message); setStatus('error', t.disconnected); });
 }
 
 async function loadData() {
-  if (!socket?.connected) return;
+  if (!socket?.connected) { console.warn('[EF] loadData: socket not connected'); return; }
+  console.log('[EF] getState ->', snapshotStateId());
   socket.emit('getState', snapshotStateId(), (err, state) => {
+    console.log('[EF] getState response: err=', err, 'state=', state);
     if (!err && state?.val) {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
         renderAll();
       } catch (e) {
-        console.warn('Failed to parse snapshot:', e);
+        console.warn('[EF] Failed to parse snapshot:', e);
       }
     }
   });
