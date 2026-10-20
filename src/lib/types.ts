@@ -178,6 +178,8 @@ export interface MeterReadings {
     solar: NormalizedValue;
     consumption: NormalizedValue;
     evCharging: NormalizedValue;
+    batteryCharge: NormalizedValue;
+    batteryDischarge: NormalizedValue;
 }
 
 export interface SolarStatistics {

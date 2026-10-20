@@ -125,6 +125,8 @@ export function generateDemoSnapshot(scenario: DemoScenario, ts: number): Dashbo
         solar: demoMeasured(45678.9, ts),
         consumption: demoMeasured(23456.7, ts),
         evCharging: scenario.includes("ev") ? demoMeasured(1234.5, ts) : { value: null, quality: { provenance: "measured", availability: "unavailable", freshness: "current", timestamp: ts } },
+        batteryCharge: demoMeasured(587.4, ts),
+        batteryDischarge: demoMeasured(541.2, ts),
     };
 
     return {

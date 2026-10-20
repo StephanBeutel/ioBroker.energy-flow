@@ -238,8 +238,8 @@ class EnergyFlowAdapter extends utils.Adapter {
                     gridImportMeterKwh: meters.gridImport.value,
                     gridExportMeterKwh: meters.gridExport.value,
                     consumptionMeterKwh: meters.consumption.value,
-                    batteryChargeMeterKwh: null,
-                    batteryDischargeMeterKwh: null,
+                    batteryChargeMeterKwh: meters.batteryCharge.value,
+                    batteryDischargeMeterKwh: meters.batteryDischarge.value,
                     evMeterKwh: meters.evCharging.value,
                     nowMs,
                 },
@@ -456,6 +456,8 @@ class EnergyFlowAdapter extends utils.Adapter {
             solar: unavailable(nowMs), // Solar meter handled per-source
             consumption: await readMeter(cfg?.house?.consumptionMeterObjectId, cfg?.house?.consumptionMeterUnit ?? "kWh", cfg?.house?.consumptionMeterFactor ?? 1),
             evCharging: await readMeter(cfg?.ev?.chargingMeterObjectId, cfg?.ev?.chargingMeterUnit ?? "kWh", cfg?.ev?.chargingMeterFactor ?? 1),
+            batteryCharge: await readMeter(cfg?.battery?.energyChargingObjectId, cfg?.battery?.energyChargingUnit ?? "kWh"),
+            batteryDischarge: await readMeter(cfg?.battery?.energyDischargingObjectId, cfg?.battery?.energyDischargingUnit ?? "kWh"),
         };
     }
 
