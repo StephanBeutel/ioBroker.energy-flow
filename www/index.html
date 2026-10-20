@@ -361,6 +361,30 @@
 
   canvas { width: 100% !important; }
 
+  .chart-spinner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    gap: 8px;
+  }
+
+  .chart-spinner::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* ===== Meter Readings ===== */
   .meter-grid {
     display: grid;
@@ -1099,20 +1123,16 @@ function buildChartSection() {
 
   const container = document.createElement('div');
   container.className = 'chart-container tall';
+  const spinner = document.createElement('div');
+  spinner.id = 'chartSpinner';
+  spinner.className = 'chart-spinner';
+  spinner.textContent = activePeriod === 'today' ? t.powerHistory : t.dailySolar;
+  spinner.style.display = activePeriod === 'today' ? 'none' : 'flex';
+  container.appendChild(spinner);
   const canvas = document.createElement('canvas');
   canvas.id = 'powerChart';
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', t.powerHistory);
-  if (activePeriod !== 'today') {
-    // Shown until async history fetch populates the chart
-    canvas.style.cssText = 'display:flex;align-items:center;justify-content:center;';
-    const placeholder = document.createElement('div');
-    placeholder.id = 'chartPlaceholder';
-    placeholder.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-muted);font-size:13px;pointer-events:none;';
-    placeholder.textContent = '…';
-    container.style.position = 'relative';
-    container.appendChild(placeholder);
-  }
   container.appendChild(canvas);
   section.appendChild(container);
 
@@ -1124,6 +1144,13 @@ function renderPowerChart() {
   if (!canvas || typeof Chart === 'undefined') return;
   if (powerChart) { powerChart.destroy(); powerChart = null; }
 
+  if (activePeriod !== 'today' && !dailyBars.length) {
+    console.log('[EF] renderPowerChart: no dailyBars yet, waiting for fetch');
+    return;
+  }
+
+  const spinner = document.getElementById('chartSpinner');
+  if (spinner) spinner.style.display = 'none';
   if (activePeriod === 'today') {
     // 24h line chart
     const labels = powerHistory.map(p => {
@@ -1159,10 +1186,8 @@ function renderPowerChart() {
       },
     });
   } else {
-    // Month or year: solar kWh bar chart from dailyBars — skip if not loaded yet
+    // Month or year: solar kWh bar chart from dailyBars
     if (!dailyBars.length) return;
-    const ph = document.getElementById('chartPlaceholder');
-    if (ph) ph.remove();
     let bars = [];
     if (activePeriod === 'month') {
       // Last 30 days
@@ -1414,13 +1439,16 @@ async function loadHistoryData() {
 
 async function fetchHistoryForPeriod(period) {
   const hc = snapshot?.historyConfig;
+  console.log('[EF] fetchHistoryForPeriod', period, 'hc=', hc, 'socket connected=', socket?.connected);
   if (!hc || !socket?.connected) return;
 
   const toW = (v, unit) => v === null || v === undefined ? null : unit === 'kW' ? v * 1000 : v;
 
   function getHistory(id, opts) {
     return new Promise(resolve => {
+      console.log('[EF] getHistory', id, opts);
       socket.emit('getHistory', id, opts, (err, result) => {
+        console.log('[EF] getHistory result', id, 'err=', err, 'count=', result?.length);
         if (err) { console.warn('[EF] getHistory error for', id, err); resolve([]); return; }
         resolve(result || []);
       });
