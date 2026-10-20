@@ -658,6 +658,10 @@ function detectInstance() {
   if (m) instanceId = parseInt(m[1], 10);
 }
 
+function snapshotStateId() {
+  return `energy-flow.${instanceId}.info.snapshot`;
+}
+
 function initSocket() {
   if (typeof io === 'undefined') return;
   socket = io(window.location.origin, {
@@ -667,39 +671,46 @@ function initSocket() {
     reconnectionDelay: 2000,
     reconnectionAttempts: Infinity,
   });
+
   socket.on('connect', () => {
-    setStatus('live', t.connected);
+    // Subscribe so we get pushed updates whenever the state changes
+    socket.emit('subscribeStates', snapshotStateId(), (err) => {
+      if (err) console.warn('subscribeStates error:', err);
+    });
+    // Also fetch the current value immediately
     loadData();
   });
-  socket.on('disconnect', () => {
-    setStatus('error', t.disconnected);
-  });
-  socket.on('connect_error', () => {
-    setStatus('error', t.disconnected);
-  });
-}
 
-function sendToAdapter(command, message) {
-  return new Promise((resolve) => {
-    if (!socket?.connected) { resolve(null); return; }
-    let settled = false;
-    const done = (val) => { if (!settled) { settled = true; resolve(val ?? null); } };
-    socket.emit('sendTo', `energy-flow.${instanceId}`, command, message || {}, done);
-    setTimeout(() => done(null), 5000);
+  // Pushed state change — parse and render directly
+  socket.on('stateChange', (id, state) => {
+    if (id === snapshotStateId() && state?.val) {
+      try {
+        snapshot = JSON.parse(state.val);
+        setStatus('live', t.connected);
+        renderAll();
+      } catch (e) {
+        console.warn('Failed to parse snapshot state:', e);
+      }
+    }
   });
+
+  socket.on('disconnect', () => setStatus('error', t.disconnected));
+  socket.on('connect_error', () => setStatus('error', t.disconnected));
 }
 
 async function loadData() {
-  try {
-    const data = await sendToAdapter('getSnapshot', {});
-    if (data) {
-      snapshot = data;
-      setStatus('live', t.connected);
-      renderAll();
+  if (!socket?.connected) return;
+  socket.emit('getState', snapshotStateId(), (err, state) => {
+    if (!err && state?.val) {
+      try {
+        snapshot = JSON.parse(state.val);
+        setStatus('live', t.connected);
+        renderAll();
+      } catch (e) {
+        console.warn('Failed to parse snapshot:', e);
+      }
     }
-  } catch (err) {
-    console.error('Data load error:', err);
-  }
+  });
 }
 
 // ===== Status helpers =====
@@ -1330,11 +1341,6 @@ async function init() {
     if (!snapshot) await loadDemoData();
   }, 5000);
 
-  // Periodic refresh every 10s while connected
-  setInterval(() => {
-    if (socket?.connected) loadData();
-  }, 10000);
-
   // Chart data refresh
   await loadHistoryData();
   setInterval(async () => {
@@ -1352,13 +1358,7 @@ async function loadDemoData() {
 
 async function loadHistoryData() {
   if (snapshot && !snapshot.demo) {
-    // Real mode: fetch from adapter
-    const hist = await sendToAdapter('getHistory', {});
-    if (hist?.history) powerHistory = hist.history;
-    const bars = await sendToAdapter('getDailyBars', {});
-    if (bars?.bars) dailyBars = bars.bars;
-    renderPowerChart();
-    renderBarChart();
+    // History charts not yet implemented for real mode
     return;
   }
 

@@ -39,6 +39,7 @@ export class StateManager {
             { id: "info.status", name: "Adapter status", type: "string", role: "text" },
             { id: "info.lastUpdate", name: "Last update", type: "number", role: "date" },
             { id: "info.lastUpdateStr", name: "Last update (string)", type: "string", role: "text" },
+            { id: "info.snapshot", name: "Dashboard snapshot (JSON)", type: "string", role: "json" },
             // Power
             { id: "power.solar", name: "Solar power", type: "number", role: "value.power", unit: "W" },
             { id: "power.solarQuality", name: "Solar power quality", type: "string", role: "json" },

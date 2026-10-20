@@ -493,8 +493,8 @@ class EnergyFlowAdapter extends utils.Adapter {
     }
 
     private async publishDashboardSnapshot(snap: DashboardSnapshot): Promise<void> {
-        // Store latest snapshot for web requests via sendTo
         this._lastSnapshot = snap;
+        await this.setState("info.snapshot", { val: JSON.stringify(snap), ack: true });
     }
 
     private _lastSnapshot: DashboardSnapshot | null = null;
