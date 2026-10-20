@@ -1148,11 +1148,19 @@ function renderPowerChart() {
   const spinner = document.getElementById('chartSpinner');
   if (spinner) spinner.style.display = 'none';
 
-  // Always a 24h line chart regardless of period
   const labels = powerHistory.map(p => {
     const d = new Date(p.ts);
-    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    const hh = d.getHours().toString().padStart(2,'0');
+    const mm = d.getMinutes().toString().padStart(2,'0');
+    const dd = d.getDate().toString().padStart(2,'0');
+    const mo = (d.getMonth()+1).toString().padStart(2,'0');
+    if (activePeriod === 'today') return `${hh}:${mm}`;
+    if (activePeriod === 'month') return `${dd}.${mo} ${hh}:00`;
+    return `${dd}.${mo}`;
   });
+
+  const maxTicks = activePeriod === 'today' ? 12 : activePeriod === 'month' ? 15 : 12;
+
   const seriesDef = [
     { key: 'solar', label: t.solar, color: '#10b981', field: 'solar' },
     { key: 'house', label: t.house, color: '#3b82f6', field: 'house' },
@@ -1166,7 +1174,7 @@ function renderPowerChart() {
     datasets.push({
       label, borderColor: color, backgroundColor: color + '20',
       data: powerHistory.map(p => p[field] !== null ? p[field] / 1000 : null),
-      fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2, spanGaps: false,
+      fill: false, tension: 0.3, pointRadius: 0, borderWidth: activePeriod === 'year' ? 1 : 2, spanGaps: false,
     });
   });
   powerChart = new Chart(canvas, {
@@ -1176,7 +1184,7 @@ function renderPowerChart() {
       responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
       plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
       scales: {
-        x: { ticks: { color: '#64748b', maxTicksLimit: 12 }, grid: { color: '#2a3a52' } },
+        x: { ticks: { color: '#64748b', maxTicksLimit: maxTicks }, grid: { color: '#2a3a52' } },
         y: { ticks: { color: '#64748b', callback: v => v + ' kW' }, grid: { color: '#2a3a52' } },
       },
     },
@@ -1462,34 +1470,29 @@ async function fetchHistoryForPeriod(period) {
 
   } else if (period === 'month') {
     if (!hc.solar) return;
-    const from24 = nowMs - 24 * 3600_000;
     const from30 = nowMs - 30 * 86_400_000;
-    const opts5m = { instance: hc.sqlInstance, start: from24, end: nowMs, step: 300_000, aggregate: 'average' };
-    const opts1h = { instance: hc.sqlInstance, start: from30, end: nowMs, step: 3600_000, aggregate: 'average' };
+    const opts1h = { instance: hc.sqlInstance, start: from30, end: nowMs, step: 3_600_000, aggregate: 'average' };
 
     const ids = [hc.solar, hc.grid, hc.house, hc.batCharge, hc.batDischarge, hc.batPower].filter(Boolean);
     const results = {};
-    await Promise.all([
-      ...ids.map(async id => { results[id] = await getHistory(id, opts5m); }),
-      getHistory(hc.solar, opts1h).then(pts => { results['__solar1h'] = pts; }),
-    ]);
+    await Promise.all(ids.map(async id => { results[id] = await getHistory(id, opts1h); }));
     if (activePeriod !== period) return;
     powerHistory = mergePowerHistory(results);
-    dailyBars = aggregateToDailyBars(results['__solar1h'], hc.solarUnit, nowMs);
+    // solar bars reuse same hourly data
+    dailyBars = aggregateToDailyBars(results[hc.solar] || [], hc.solarUnit, nowMs);
     renderPowerChart();
     renderBarChart();
 
   } else if (period === 'year') {
     if (!hc.solar) return;
-    const from24 = nowMs - 24 * 3600_000;
     const from365 = nowMs - 365 * 86_400_000;
-    const opts5m = { instance: hc.sqlInstance, start: from24, end: nowMs, step: 300_000, aggregate: 'average' };
-    const opts1h = { instance: hc.sqlInstance, start: from365, end: nowMs, step: 3600_000, aggregate: 'average' };
+    const opts24h = { instance: hc.sqlInstance, start: from365, end: nowMs, step: 86_400_000, aggregate: 'average' };
+    const opts1h  = { instance: hc.sqlInstance, start: from365, end: nowMs, step: 3_600_000,  aggregate: 'average' };
 
     const ids = [hc.solar, hc.grid, hc.house, hc.batCharge, hc.batDischarge, hc.batPower].filter(Boolean);
     const results = {};
     await Promise.all([
-      ...ids.map(async id => { results[id] = await getHistory(id, opts5m); }),
+      ...ids.map(async id => { results[id] = await getHistory(id, opts24h); }),
       getHistory(hc.solar, opts1h).then(pts => { results['__solar1h'] = pts; }),
     ]);
     if (activePeriod !== period) return;
