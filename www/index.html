@@ -924,9 +924,12 @@ function buildFlowSection(s) {
     // Power value
     let powerVal = '';
     let subVal = '';
+    let nodeStale = false;
 
     if (type === 'solar') {
-      powerVal = fmtW(snapshot?.power?.solar?.value);
+      const sv = snapshot?.power?.solar;
+      powerVal = fmtW(sv?.value);
+      nodeStale = sv?.quality?.freshness === 'stale';
     } else if (type === 'battery') {
       const batt = snapshot?.power?.battery;
       const soc = snapshot?.power?.batterySoc;
@@ -934,11 +937,19 @@ function buildFlowSection(s) {
       const statusLabel = status ? t[status] || status : '';
       powerVal = fmtW(batt?.value);
       subVal = `SoC: ${fmtPct(soc?.value)} · ${statusLabel}`;
+      nodeStale = batt?.quality?.freshness === 'stale';
     } else if (type === 'grid') {
-      const gv = snapshot?.power?.grid?.value;
-      powerVal = fmtW(Math.abs(gv ?? 0)) + (gv < 0 ? ' ↑' : ' ↓');
+      const gv = snapshot?.power?.grid;
+      if (gv?.value != null) {
+        powerVal = fmtW(Math.abs(gv.value)) + (gv.value < 0 ? ' ↑' : ' ↓');
+      } else {
+        powerVal = t.noData;
+      }
+      nodeStale = gv?.quality?.freshness === 'stale';
     } else if (type === 'house') {
-      powerVal = fmtW(snapshot?.power?.house?.value);
+      const hv = snapshot?.power?.house;
+      powerVal = fmtW(hv?.value);
+      nodeStale = hv?.quality?.freshness === 'stale';
     } else if (type === 'ev') {
       powerVal = fmtW(snapshot?.power?.evCharging?.value);
       subVal = t[snapshot?.power?.evStatus] || '';
@@ -948,7 +959,7 @@ function buildFlowSection(s) {
     pText.setAttribute('x', String(nodeW / 2));
     pText.setAttribute('y', subVal ? '40' : '46');
     pText.setAttribute('class', 'node-power');
-    pText.setAttribute('fill', '#e2e8f0');
+    pText.setAttribute('fill', nodeStale ? 'var(--stale)' : '#e2e8f0');
     pText.textContent = powerVal;
     g.appendChild(pText);
 
