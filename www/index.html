@@ -767,7 +767,8 @@ function renderAll() {
   main.appendChild(buildFlowSection(s));
   main.appendChild(buildEnergySection(s));
   main.appendChild(buildChartSection());
-  main.appendChild(buildDailyBarsSection());
+  const dailySection = buildDailyBarsSection();
+  if (dailySection) main.appendChild(dailySection);
   main.appendChild(buildMetersSection(s));
   main.appendChild(buildStatsSection(s));
 
@@ -780,7 +781,7 @@ function renderAll() {
 
   // Render charts
   renderPowerChart();
-  renderBarChart();
+  if (activePeriod === 'today') renderBarChart();
 }
 
 // ===== Flow diagram =====
@@ -1018,8 +1019,7 @@ function buildEnergySection(s) {
     btn.addEventListener('click', () => {
       activePeriod = period;
       renderAll();
-    });
-    tabs.appendChild(btn);
+    });    tabs.appendChild(btn);
   });
   section.appendChild(tabs);
 
@@ -1066,32 +1066,33 @@ function buildChartSection() {
 
   const title = document.createElement('div');
   title.className = 'card-title';
-  title.textContent = t.powerHistory;
+  title.textContent = activePeriod === 'today' ? t.powerHistory : t.dailySolar;
   section.appendChild(title);
 
-  // Legend
-  const legend = document.createElement('div');
-  legend.className = 'legend';
-  const series = [
-    { key: 'solar', label: t.solar, color: '#10b981' },
-    { key: 'house', label: t.house, color: '#3b82f6' },
-    { key: 'battery', label: t.battery, color: '#06b6d4' },
-    { key: 'grid', label: t.grid, color: '#f97316' },
-    { key: 'ev', label: t.ev, color: '#8b5cf6' },
-  ];
-
-  series.forEach(({ key, label, color }) => {
-    const item = document.createElement('div');
-    item.className = 'legend-item' + (activeChartSeries[key] ? ' active' : '');
-    item.innerHTML = `<span class="legend-dot" style="background:${color}"></span>${escapeHtml(label)}`;
-    item.addEventListener('click', () => {
-      activeChartSeries[key] = !activeChartSeries[key];
-      renderPowerChart();
-      item.classList.toggle('active');
+  // Legend — only for today (line chart)
+  if (activePeriod === 'today') {
+    const legend = document.createElement('div');
+    legend.className = 'legend';
+    const series = [
+      { key: 'solar', label: t.solar, color: '#10b981' },
+      { key: 'house', label: t.house, color: '#3b82f6' },
+      { key: 'battery', label: t.battery, color: '#06b6d4' },
+      { key: 'grid', label: t.grid, color: '#f97316' },
+      { key: 'ev', label: t.ev, color: '#8b5cf6' },
+    ];
+    series.forEach(({ key, label, color }) => {
+      const item = document.createElement('div');
+      item.className = 'legend-item' + (activeChartSeries[key] ? ' active' : '');
+      item.innerHTML = `<span class="legend-dot" style="background:${color}"></span>${escapeHtml(label)}`;
+      item.addEventListener('click', () => {
+        activeChartSeries[key] = !activeChartSeries[key];
+        renderPowerChart();
+        item.classList.toggle('active');
+      });
+      legend.appendChild(item);
     });
-    legend.appendChild(item);
-  });
-  section.appendChild(legend);
+    section.appendChild(legend);
+  }
 
   const container = document.createElement('div');
   container.className = 'chart-container tall';
@@ -1107,61 +1108,83 @@ function buildChartSection() {
 
 function renderPowerChart() {
   const canvas = document.getElementById('powerChart');
-  if (!canvas) return;
-
-  const labels = powerHistory.map(p => {
-    const d = new Date(p.ts);
-    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
-  });
-
-  const datasets = [];
-  const seriesDef = [
-    { key: 'solar', label: t.solar, color: '#10b981', field: 'solar' },
-    { key: 'house', label: t.house, color: '#3b82f6', field: 'house' },
-    { key: 'battery', label: t.battery, color: '#06b6d4', field: 'battery' },
-    { key: 'grid', label: t.grid, color: '#f97316', field: 'grid' },
-    { key: 'ev', label: t.ev, color: '#8b5cf6', field: 'ev' },
-  ];
-
-  seriesDef.forEach(({ key, label, color, field }) => {
-    if (!activeChartSeries[key]) return;
-    datasets.push({
-      label,
-      data: powerHistory.map(p => p[field] !== null ? p[field] / 1000 : null),
-      borderColor: color,
-      backgroundColor: color + '20',
-      fill: false,
-      tension: 0.3,
-      pointRadius: 0,
-      borderWidth: 2,
-      spanGaps: false,
-    });
-  });
-
+  if (!canvas || typeof Chart === 'undefined') return;
   if (powerChart) { powerChart.destroy(); powerChart = null; }
 
-  if (typeof Chart === 'undefined') return;
-
-  powerChart = new Chart(canvas, {
-    type: 'line',
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 300 },
-      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-      scales: {
-        x: { ticks: { color: '#64748b', maxTicksLimit: 12 }, grid: { color: '#2a3a52' } },
-        y: { ticks: { color: '#64748b', callback: v => v + ' kW' }, grid: { color: '#2a3a52' } },
+  if (activePeriod === 'today') {
+    // 24h line chart
+    const labels = powerHistory.map(p => {
+      const d = new Date(p.ts);
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    });
+    const seriesDef = [
+      { key: 'solar', label: t.solar, color: '#10b981', field: 'solar' },
+      { key: 'house', label: t.house, color: '#3b82f6', field: 'house' },
+      { key: 'battery', label: t.battery, color: '#06b6d4', field: 'battery' },
+      { key: 'grid', label: t.grid, color: '#f97316', field: 'grid' },
+      { key: 'ev', label: t.ev, color: '#8b5cf6', field: 'ev' },
+    ];
+    const datasets = [];
+    seriesDef.forEach(({ key, label, color, field }) => {
+      if (!activeChartSeries[key]) return;
+      datasets.push({
+        label, borderColor: color, backgroundColor: color + '20',
+        data: powerHistory.map(p => p[field] !== null ? p[field] / 1000 : null),
+        fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2, spanGaps: false,
+      });
+    });
+    powerChart = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { ticks: { color: '#64748b', maxTicksLimit: 12 }, grid: { color: '#2a3a52' } },
+          y: { ticks: { color: '#64748b', callback: v => v + ' kW' }, grid: { color: '#2a3a52' } },
+        },
       },
-    },
-  });
+    });
+  } else {
+    // Month or year: solar kWh bar chart from dailyBars
+    let bars = [];
+    if (activePeriod === 'month') {
+      // Last 30 days
+      bars = dailyBars.slice(-30);
+    } else {
+      // Year: aggregate dailyBars by month
+      const monthly = new Map();
+      dailyBars.forEach(b => {
+        const mon = b.date.substring(0, 7); // YYYY-MM
+        monthly.set(mon, (monthly.get(mon) ?? 0) + (b.kWh ?? 0));
+      });
+      bars = Array.from(monthly.entries()).map(([mon, kWh]) => ({ date: mon, kWh, complete: true }));
+    }
+    const labels = bars.map(b => b.date.substring(5));
+    const data = bars.map(b => b.kWh);
+    const colors = bars.map(b => b.complete ? '#10b981' : '#10b98180');
+    powerChart = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'kWh', data, backgroundColor: colors, borderRadius: 4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#64748b', maxTicksLimit: 15 }, grid: { color: '#2a3a52' } },
+          y: { ticks: { color: '#64748b', callback: v => v + ' kWh' }, grid: { color: '#2a3a52' } },
+        },
+      },
+    });
+  }
 }
 
 // ===== Daily bars section =====
 function buildDailyBarsSection() {
+  // For month/year the main chart already shows solar bars — skip this section
+  if (activePeriod !== 'today') return null;
+
   const section = document.createElement('section');
-  section.className = 'card chart-section-half';
+  section.className = 'card chart-section';
 
   const title = document.createElement('div');
   title.className = 'card-title';
