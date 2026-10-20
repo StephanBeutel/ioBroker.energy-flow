@@ -87,7 +87,9 @@
       "gridChargingEnabled": true,
       "gridExportEnabled": true,
       "chargingObjectId": "",
+      "chargingUnit": "kW",
       "dischargingObjectId": "",
+      "dischargingUnit": "kW",
       "energyChargingObjectId": "",
       "energyDischargingObjectId": ""
     },

@@ -38,7 +38,9 @@ export interface BatteryConfig {
     gridChargingEnabled: boolean;
     gridExportEnabled: boolean;
     chargingObjectId?: string;
+    chargingUnit?: PowerUnit;
     dischargingObjectId?: string;
+    dischargingUnit?: PowerUnit;
     energyChargingObjectId?: string;
     energyDischargingObjectId?: string;
     energyChargingUnit?: EnergyUnit;

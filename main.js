@@ -357,7 +357,36 @@ class EnergyFlowAdapter extends utils.Adapter {
     }
     async readBatteryPower(cfg, nowMs) {
         const bat = cfg?.battery;
-        if (!bat?.enabled || !bat.powerObjectId)
+        if (!bat?.enabled)
+            return unavailable(nowMs);
+        // Separate charge/discharge objects (e.g. FoxESS batCharge + batDischarge)
+        if (bat.chargingObjectId && bat.dischargingObjectId) {
+            const [chargeState, dischargeState] = await Promise.all([
+                this.getForeignStateAsync(bat.chargingObjectId).catch(() => null),
+                this.getForeignStateAsync(bat.dischargingObjectId).catch(() => null),
+            ]);
+            const chargeNorm = (0, normalizer_1.normalizeRawState)(chargeState, {
+                unit: bat.chargingUnit ?? "kW",
+                factor: 1,
+                invert: false,
+                maxAgeSeconds: bat.maxAgeSeconds ?? 300,
+            }, nowMs);
+            const dischargeNorm = (0, normalizer_1.normalizeRawState)(dischargeState, {
+                unit: bat.dischargingUnit ?? "kW",
+                factor: 1,
+                invert: false,
+                maxAgeSeconds: bat.maxAgeSeconds ?? 300,
+            }, nowMs);
+            if (chargeNorm.value === null && dischargeNorm.value === null)
+                return unavailable(nowMs);
+            const charge = chargeNorm.value ?? 0;
+            const discharge = dischargeNorm.value ?? 0;
+            // positive = discharging, negative = charging
+            const net = discharge - charge;
+            const ts = Math.max(chargeNorm.quality?.timestamp ?? 0, dischargeNorm.quality?.timestamp ?? 0) || nowMs;
+            return (0, normalizer_1.makeMeasured)(net, ts, bat.dischargingObjectId);
+        }
+        if (!bat.powerObjectId)
             return unavailable(nowMs);
         const state = await this.getForeignStateAsync(bat.powerObjectId).catch(() => null);
         return (0, normalizer_1.normalizeRawState)(state, {

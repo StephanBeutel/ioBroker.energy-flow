@@ -362,8 +362,36 @@ class EnergyFlowAdapter extends utils.Adapter {
 
     private async readBatteryPower(cfg: AdapterConfig, nowMs: number): Promise<NormalizedValue> {
         const bat = cfg?.battery;
-        if (!bat?.enabled || !bat.powerObjectId) return unavailable(nowMs);
+        if (!bat?.enabled) return unavailable(nowMs);
 
+        // Separate charge/discharge objects (e.g. FoxESS batCharge + batDischarge)
+        if (bat.chargingObjectId && bat.dischargingObjectId) {
+            const [chargeState, dischargeState] = await Promise.all([
+                this.getForeignStateAsync(bat.chargingObjectId).catch(() => null),
+                this.getForeignStateAsync(bat.dischargingObjectId).catch(() => null),
+            ]);
+            const chargeNorm = normalizeRawState(chargeState as ioBroker.State | null, {
+                unit: bat.chargingUnit ?? "kW",
+                factor: 1,
+                invert: false,
+                maxAgeSeconds: bat.maxAgeSeconds ?? 300,
+            }, nowMs);
+            const dischargeNorm = normalizeRawState(dischargeState as ioBroker.State | null, {
+                unit: bat.dischargingUnit ?? "kW",
+                factor: 1,
+                invert: false,
+                maxAgeSeconds: bat.maxAgeSeconds ?? 300,
+            }, nowMs);
+            if (chargeNorm.value === null && dischargeNorm.value === null) return unavailable(nowMs);
+            const charge = chargeNorm.value ?? 0;
+            const discharge = dischargeNorm.value ?? 0;
+            // positive = discharging, negative = charging
+            const net = discharge - charge;
+            const ts = Math.max(chargeNorm.quality?.timestamp ?? 0, dischargeNorm.quality?.timestamp ?? 0) || nowMs;
+            return makeMeasured(net, ts, bat.dischargingObjectId);
+        }
+
+        if (!bat.powerObjectId) return unavailable(nowMs);
         const state = await this.getForeignStateAsync(bat.powerObjectId).catch(() => null);
         return normalizeRawState(state as ioBroker.State | null, {
             unit: bat.powerUnit ?? "W",

@@ -91,6 +91,47 @@
           "xs": 12,
           "hidden": "!data.battery.enabled"
         },
+        "battery_separate_hint": {
+          "type": "staticText",
+          "text": "battery_separate_hint",
+          "newLine": true,
+          "xs": 12,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.chargingObjectId": {
+          "type": "objectId",
+          "label": "battery_charge_object",
+          "help": "battery_charge_object_help",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.chargingUnit": {
+          "type": "select",
+          "label": "unit",
+          "options": [{ "value": "W", "label": "W" }, { "value": "kW", "label": "kW" }],
+          "default": "kW",
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.dischargingObjectId": {
+          "type": "objectId",
+          "label": "battery_discharge_object",
+          "help": "battery_discharge_object_help",
+          "types": "state",
+          "newLine": true,
+          "xs": 12, "sm": 8, "md": 6,
+          "hidden": "!data.battery.enabled"
+        },
+        "battery.dischargingUnit": {
+          "type": "select",
+          "label": "unit",
+          "options": [{ "value": "W", "label": "W" }, { "value": "kW", "label": "kW" }],
+          "default": "kW",
+          "xs": 12, "sm": 4, "md": 2,
+          "hidden": "!data.battery.enabled"
+        },
         "battery.socObjectId": {
           "type": "objectId",
           "label": "battery_soc_object",
