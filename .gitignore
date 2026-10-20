@@ -1,6 +1,10 @@
 node_modules/
+build/
 build-test/
 *.tgz
 .nyc_output/
 coverage/
 .env
+.DS_Store
+dataPointImages/
+
