@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { calculatePowerBalance } from "./lib/powerBalance.js";
-import { makeMeasured } from "./lib/normalizer.js";
-import type { NormalizedValue } from "./lib/types.js";
+import { calculatePowerBalance } from "./lib/powerBalance";
+import { makeMeasured } from "./lib/normalizer";
+import type { NormalizedValue } from "./lib/types";
 
 const now = 1700000000000;
 

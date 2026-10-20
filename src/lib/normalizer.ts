@@ -1,4 +1,4 @@
-import type { InputConfig, MeasurementUnit, NormalizedValue, MeasurementQuality } from "./types.js";
+import type { InputConfig, MeasurementUnit, NormalizedValue, MeasurementQuality } from "./types";
 
 const MAX_SAFE_W = 1_000_000_000;
 

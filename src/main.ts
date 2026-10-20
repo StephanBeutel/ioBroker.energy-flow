@@ -7,14 +7,14 @@ import type {
     MeterReadings,
     DashboardSnapshot,
     PowerHistoryPoint,
-} from "./lib/types.js";
-import { normalizeRawState, makeEstimated, makeMeasured, clampNonNegative, sumAvailable } from "./lib/normalizer.js";
-import { calculatePowerBalance } from "./lib/powerBalance.js";
-import { estimateFlows } from "./lib/energyFlows.js";
-import { updateCounters, calculateSolarStatistics, pruneHistory, getLocalDateString } from "./lib/energyCounter.js";
-import { PersistenceManager } from "./lib/persistence.js";
-import { StateManager } from "./lib/stateManager.js";
-import { generateDemoSnapshot } from "./lib/demoMode.js";
+} from "./lib/types";
+import { normalizeRawState, makeEstimated, makeMeasured, clampNonNegative, sumAvailable } from "./lib/normalizer";
+import { calculatePowerBalance } from "./lib/powerBalance";
+import { estimateFlows } from "./lib/energyFlows";
+import { updateCounters, calculateSolarStatistics, pruneHistory, getLocalDateString } from "./lib/energyCounter";
+import { PersistenceManager } from "./lib/persistence";
+import { StateManager } from "./lib/stateManager";
+import { generateDemoSnapshot } from "./lib/demoMode";
 
 const ADAPTER_NAME = "energy-flow";
 const UPDATE_MIN_INTERVAL_MS = 1000;
@@ -142,7 +142,7 @@ class EnergyFlowAdapter extends utils.Adapter {
         this.log.debug(`Subscribed to ${this.subscribedIds.size} source states`);
     }
 
-    private onStateChange(id: string, state: ioBroker.State | null | undefined): void {
+    private onStateChange(_id: string, state: ioBroker.State | null | undefined): void {
         if (!state || !state.ack) return;
         this.scheduleUpdate(100);
     }
@@ -272,7 +272,7 @@ class EnergyFlowAdapter extends utils.Adapter {
 
             // Write states
             await this.stateManager.updatePower(power, nowMs);
-            await this.stateManager.updateFlows(flows, nowMs);
+            await this.stateManager.updateFlows(flows);
             await this.stateManager.updateEnergy(todayEnergyPeriod, monthEnergyPeriod, yearEnergyPeriod);
             await this.stateManager.updateMeters(meters);
             await this.stateManager.updateStatistics(stats);

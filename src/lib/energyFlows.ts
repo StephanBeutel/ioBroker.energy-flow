@@ -1,5 +1,5 @@
-import type { EnergyFlows, NormalizedValue, BatteryConfig, EvConfig } from "./types.js";
-import { makeEstimated, makeCalculated, clampNonNegative } from "./normalizer.js";
+import type { EnergyFlows, NormalizedValue, BatteryConfig, EvConfig } from "./types";
+import { makeEstimated } from "./normalizer";
 
 function unavailable(ts: number): NormalizedValue {
     return {

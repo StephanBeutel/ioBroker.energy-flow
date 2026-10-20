@@ -6,7 +6,7 @@
     "name": "Energy Flow Adapter",
     "email": "info@example.com"
   },
-  "homepage": "https://github.com/example/ioBroker.energy-flow",
+  "homepage": "https://github.com/StephanBeutel/EnergyFlow",
   "license": "MIT",
   "keywords": [
     "ioBroker",
@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/example/ioBroker.energy-flow.git"
+    "url": "https://github.com/StephanBeutel/EnergyFlow.git"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -47,17 +47,18 @@
     "ts-node": "^10.9.2",
     "typescript": "~5.8.0"
   },
-  "main": "build/main.js",
+  "main": "main.js",
   "files": [
     "admin{,/!(src)/**}/!(tsconfig|tsconfig.*|.eslintrc).{json,json5}",
     "admin{,/!(src)/**}/*.{html,css,png,svg,jpg,js}",
-    "build/",
+    "lib/",
+    "main.js",
     "www/",
     "io-package.json",
     "LICENSE"
   ],
   "scripts": {
-    "prebuild": "rimraf build",
+    "prebuild": "rimraf main.js lib",
     "build": "tsc -p tsconfig.build.json",
     "watch": "tsc -p tsconfig.build.json --watch",
     "test:ts": "tsc -p tsconfig.build-test.json && mocha --timeout 10000 \"build-test/**/*.test.js\"",
@@ -91,7 +92,7 @@
     "instrument": true
   },
   "bugs": {
-    "url": "https://github.com/example/ioBroker.energy-flow/issues"
+    "url": "https://github.com/StephanBeutel/EnergyFlow/issues"
   },
   "readmeFilename": "README.md"
 }

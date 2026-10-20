@@ -1,13 +1,22 @@
 {
-  "extends": "@tsconfig/node22/tsconfig.json",
   "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "noEmit": true,
-    "allowJs": false,
-    "noEmitOnError": true,
-    "outDir": "./build/",
+    "outDir": "./",
     "rootDir": "./src",
     "removeComments": false,
-    "resolveJsonModule": true,
     "sourceMap": true,
     "inlineSourceMap": false,
     "types": ["@iobroker/types", "node", "mocha"]
@@ -17,7 +26,6 @@
     "test/**/*.ts"
   ],
   "exclude": [
-    "build/**",
     "node_modules/**"
   ]
 }

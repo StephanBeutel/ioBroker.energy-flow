@@ -1,5 +1,5 @@
 import * as utils from "@iobroker/adapter-core";
-import type { PowerState, EnergyFlows, EnergyPeriod, MeterReadings, SolarStatistics, NormalizedValue, EnergyAccumulator } from "./types.js";
+import type { PowerState, EnergyFlows, EnergyPeriod, MeterReadings, SolarStatistics, NormalizedValue } from "./types";
 
 type StateRole = string;
 
@@ -173,7 +173,7 @@ export class StateManager {
         ));
     }
 
-    async updateFlows(flows: EnergyFlows, ts: number): Promise<void> {
+    async updateFlows(flows: EnergyFlows): Promise<void> {
         const updates: Array<[string, number | boolean | null]> = [
             ["flows.solarToHouse", val(flows.solarToHouse)],
             ["flows.solarToBattery", val(flows.solarToBattery)],

@@ -1,8 +1,8 @@
 import type {
     PowerState, EnergyFlows, EnergyPeriod, MeterReadings,
     SolarStatistics, DashboardSnapshot, NormalizedValue,
-} from "./types.js";
-import { makeCalculated, makeEstimated } from "./normalizer.js";
+} from "./types";
+import { makeCalculated, makeEstimated } from "./normalizer";
 
 const DEMO_NOTE = "DEMO MODE - synthetic data";
 

@@ -3,12 +3,12 @@ import type {
     NormalizedValue,
     BatteryConfig,
     EvConfig,
-} from "./types.js";
+} from "./types";
 import {
     makeCalculated,
     sumAvailable,
     clampNonNegative,
-} from "./normalizer.js";
+} from "./normalizer";
 
 function makeUnavailable(note: string, ts: number): NormalizedValue {
     return {

@@ -6,8 +6,8 @@ import {
     createEmptyPersistence,
     calculateSolarStatistics,
     getLocalDateString,
-} from "./lib/energyCounter.js";
-import type { PersistenceData, DailyRecord } from "./lib/types.js";
+} from "./lib/energyCounter";
+import type { PersistenceData, DailyRecord } from "./lib/types";
 
 const TZ = "Europe/Berlin";
 

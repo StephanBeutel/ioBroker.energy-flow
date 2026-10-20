@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { generateDemoSnapshot } from "./lib/demoMode.js";
+import { generateDemoSnapshot } from "./lib/demoMode";
 
 describe("Demo mode", () => {
     const now = Date.now();

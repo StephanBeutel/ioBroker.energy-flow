@@ -4,11 +4,11 @@ import type {
     DailyRecord,
     PowerIntegrationState,
     MeterSnapshot,
-    NormalizedValue,
+    NormalizedValue as _NormalizedValue,
     SolarStatistics,
     EnergyPeriod,
-} from "./types.js";
-import { makeCalculated, makeEstimated } from "./normalizer.js";
+} from "./types";
+import { makeCalculated, makeEstimated } from "./normalizer";
 
 const PERSISTENCE_VERSION = 1;
 const MAX_INTEGRATION_GAP_MS = 60_000;  // 60 s gap = skip integration
@@ -176,7 +176,6 @@ export function updateCounters(
     data: PersistenceData,
     inputs: CounterInputs,
     timezone: string,
-    clock: () => number = Date.now,
 ): UpdateCountersResult {
     const nowMs = inputs.nowMs;
     const nowDate = new Date(nowMs);
@@ -232,7 +231,6 @@ export function updateCounters(
 
     const pi = data.powerIntegration;
     const prevTs = pi.lastTimestamp;
-    const sm = data.lastMeterSnapshot;
 
     // Helper: update one accumulator
     function updateAcc(acc: EnergyAccumulator): EnergyAccumulator {

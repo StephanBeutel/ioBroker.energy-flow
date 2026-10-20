@@ -1,6 +1,6 @@
 import * as utils from "@iobroker/adapter-core";
-import type { PersistenceData, PowerHistoryPoint } from "./types.js";
-import { migratePersistence, createEmptyPersistence } from "./energyCounter.js";
+import type { PersistenceData, PowerHistoryPoint } from "./types";
+import { migratePersistence, createEmptyPersistence } from "./energyCounter";
 
 const PERSISTENCE_KEY = "energy-flow.persistence";
 const POWER_HISTORY_KEY = "energy-flow.powerHistory";

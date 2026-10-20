@@ -5,10 +5,8 @@ import {
     normalizeRawState,
     sumAvailable,
     clampNonNegative,
-    makeCalculated,
-    makeEstimated,
     makeMeasured,
-} from "./lib/normalizer.js";
+} from "./lib/normalizer";
 
 describe("Normalizer – units and sign conventions", () => {
     describe("normalizeToW", () => {

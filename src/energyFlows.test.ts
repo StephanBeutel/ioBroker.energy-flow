@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { estimateFlows } from "./lib/energyFlows.js";
+import { estimateFlows } from "./lib/energyFlows";
 
 const now = 1700000000000;
 
