@@ -1,4 +1,6 @@
 import * as utils from "@iobroker/adapter-core";
+import * as fs from "fs";
+import * as path from "path";
 import type {
     AdapterConfig,
     NormalizedValue,
@@ -51,12 +53,29 @@ class EnergyFlowAdapter extends utils.Adapter {
         this.on("unload", this.onUnload.bind(this));
     }
 
+    private async uploadWwwFiles(): Promise<void> {
+        const wwwDir = path.join(__dirname, "..", "www");
+        if (!fs.existsSync(wwwDir)) return;
+        const files = fs.readdirSync(wwwDir);
+        for (const file of files) {
+            const filePath = path.join(wwwDir, file);
+            if (!fs.statSync(filePath).isFile()) continue;
+            try {
+                const content = fs.readFileSync(filePath);
+                await this.writeFileAsync(ADAPTER_NAME, file, content);
+            } catch (e) {
+                this.log.warn(`Could not upload www/${file}: ${e}`);
+            }
+        }
+    }
+
     private async onReady(): Promise<void> {
         this.persistence = new PersistenceManager(this as unknown as utils.AdapterInstance);
         this.stateManager = new StateManager(this as unknown as utils.AdapterInstance);
 
         await this.stateManager.createObjects();
         await this.persistence.load();
+        await this.uploadWwwFiles();
 
         const cfg = this.config as unknown as AdapterConfig;
         if (!cfg || !cfg.timezone) {

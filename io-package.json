@@ -62,7 +62,7 @@
     "messagebox": true,
     "localLinks": {
       "_default": {
-        "link": "%web_protocol%://%ip%:%web_port%/energy-flow.%instance%/",
+        "link": "/adapter/energy-flow/",
         "name": {
           "en": "Open dashboard",
           "de": "Dashboard öffnen"

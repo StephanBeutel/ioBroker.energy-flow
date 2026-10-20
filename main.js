@@ -34,6 +34,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const utils = __importStar(require("@iobroker/adapter-core"));
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 const normalizer_1 = require("./lib/normalizer");
 const powerBalance_1 = require("./lib/powerBalance");
 const energyFlows_1 = require("./lib/energyFlows");
@@ -72,11 +74,30 @@ class EnergyFlowAdapter extends utils.Adapter {
         this.on("message", this.onMessage.bind(this));
         this.on("unload", this.onUnload.bind(this));
     }
+    async uploadWwwFiles() {
+        const wwwDir = path.join(__dirname, "..", "www");
+        if (!fs.existsSync(wwwDir))
+            return;
+        const files = fs.readdirSync(wwwDir);
+        for (const file of files) {
+            const filePath = path.join(wwwDir, file);
+            if (!fs.statSync(filePath).isFile())
+                continue;
+            try {
+                const content = fs.readFileSync(filePath);
+                await this.writeFileAsync(ADAPTER_NAME, file, content);
+            }
+            catch (e) {
+                this.log.warn(`Could not upload www/${file}: ${e}`);
+            }
+        }
+    }
     async onReady() {
         this.persistence = new persistence_1.PersistenceManager(this);
         this.stateManager = new stateManager_1.StateManager(this);
         await this.stateManager.createObjects();
         await this.persistence.load();
+        await this.uploadWwwFiles();
         const cfg = this.config;
         if (!cfg || !cfg.timezone) {
             this.log.warn("No configuration found - using defaults");
