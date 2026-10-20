@@ -79,6 +79,15 @@ class EnergyFlowAdapter extends utils.Adapter {
         if (!fs.existsSync(wwwDir))
             return;
         const namespace = `${ADAPTER_NAME}.${this.instance}`;
+        // Ensure the meta object exists for this namespace
+        const metaObj = await this.getForeignObjectAsync(namespace);
+        if (!metaObj) {
+            await this.setForeignObjectAsync(namespace, {
+                type: "meta",
+                common: { name: "energy-flow www files", type: "meta.folder" },
+                native: {},
+            });
+        }
         const files = fs.readdirSync(wwwDir);
         for (const file of files) {
             const filePath = path.join(wwwDir, file);
