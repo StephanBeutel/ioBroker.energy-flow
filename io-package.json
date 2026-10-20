@@ -59,7 +59,16 @@
         "web": ">=6.0.0"
       }
     ],
-    "messagebox": true
+    "messagebox": true,
+    "localLinks": {
+      "_default": {
+        "link": "%web_protocol%://%ip%:%web_port%/energy-flow.%instance%/",
+        "name": {
+          "en": "Open dashboard",
+          "de": "Dashboard öffnen"
+        }
+      }
+    }
   },
   "native": {
     "timezone": "Europe/Berlin",
