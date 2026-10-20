@@ -715,8 +715,14 @@ function initSocket() {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
-        loadHistoryData();
         renderAll();
+        if (activePeriod === 'today') {
+          // Today: re-fetch 24h history (snapshot may have new historyConfig)
+          loadHistoryData();
+        } else {
+          // Month/year: dailyBars already loaded, just re-render into the new canvas
+          renderPowerChart();
+        }
       } catch (e) {
         console.warn('[EF] Failed to parse snapshot state:', e);
       }
@@ -736,8 +742,8 @@ async function loadData() {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
-        loadHistoryData();
         renderAll();
+        loadHistoryData(); // always fetch on initial load regardless of period
       } catch (e) {
         console.warn('[EF] Failed to parse snapshot:', e);
       }
