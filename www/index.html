@@ -701,26 +701,22 @@ function initSocket() {
   });
 
   socket.on('connect', () => {
-    console.log('[EF] socket connected, id=', socket.id);
     socket.emit('subscribeStates', snapshotStateId(), (err) => {
       if (err) console.warn('[EF] subscribeStates error:', err);
-      else console.log('[EF] subscribeStates OK for', snapshotStateId());
     });
     loadData();
   });
 
   socket.on('stateChange', (id, state) => {
-    console.log('[EF] stateChange', id, state);
     if (id === snapshotStateId() && state?.val) {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
         renderAll();
         if (activePeriod === 'today') {
-          // Today: re-fetch 24h history (snapshot may have new historyConfig)
           loadHistoryData();
         } else {
-          // Month/year: dailyBars already loaded, just re-render into the new canvas
+          // Month/year: dailyBars already loaded, re-render into new canvas
           renderPowerChart();
         }
       } catch (e) {
@@ -734,16 +730,14 @@ function initSocket() {
 }
 
 async function loadData() {
-  if (!socket?.connected) { console.warn('[EF] loadData: socket not connected'); return; }
-  console.log('[EF] getState ->', snapshotStateId());
+  if (!socket?.connected) return;
   socket.emit('getState', snapshotStateId(), (err, state) => {
-    console.log('[EF] getState response: err=', err, 'state=', state);
     if (!err && state?.val) {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
         renderAll();
-        loadHistoryData(); // always fetch on initial load regardless of period
+        loadHistoryData();
       } catch (e) {
         console.warn('[EF] Failed to parse snapshot:', e);
       }
@@ -1148,12 +1142,10 @@ function buildChartSection() {
 
 function renderPowerChart() {
   const canvas = document.getElementById('powerChart');
-  console.log('[EF] renderPowerChart period=', activePeriod, 'canvas=', !!canvas, 'dailyBars=', dailyBars.length, 'powerHistory=', powerHistory.length);
   if (!canvas || typeof Chart === 'undefined') return;
   if (powerChart) { powerChart.destroy(); powerChart = null; }
 
   if (activePeriod !== 'today' && !dailyBars.length) {
-    console.log('[EF] renderPowerChart: no dailyBars yet, waiting for fetch');
     return;
   }
 
@@ -1447,16 +1439,13 @@ async function loadHistoryData() {
 
 async function fetchHistoryForPeriod(period) {
   const hc = snapshot?.historyConfig;
-  console.log('[EF] fetchHistoryForPeriod', period, 'hc=', hc, 'socket connected=', socket?.connected);
   if (!hc || !socket?.connected) return;
 
   const toW = (v, unit) => v === null || v === undefined ? null : unit === 'kW' ? v * 1000 : v;
 
   function getHistory(id, opts) {
     return new Promise(resolve => {
-      console.log('[EF] getHistory', id, opts);
       socket.emit('getHistory', id, opts, (err, result) => {
-        console.log('[EF] getHistory result', id, 'err=', err, 'count=', result?.length);
         if (err) { console.warn('[EF] getHistory error for', id, err); resolve([]); return; }
         resolve(result || []);
       });
@@ -1510,10 +1499,9 @@ async function fetchHistoryForPeriod(period) {
     const from30 = nowMs - 30 * 86_400_000;
     const opts = { instance: hc.sqlInstance, start: from30, end: nowMs, step: 3600_000, aggregate: 'average' };
     const solarPts = await getHistory(hc.solar, opts);
+    if (activePeriod !== period) return; // user switched tab while fetching
     dailyBars = aggregateToDailyBars(solarPts, hc.solarUnit, nowMs);
-    console.log('[EF] month: dailyBars set, count=', dailyBars.length, 'calling renderPowerChart');
     renderPowerChart();
-    console.log('[EF] month: renderPowerChart done, powerChart=', powerChart);
 
   } else if (period === 'year') {
     // 365 days, daily → monthly aggregation
@@ -1521,6 +1509,7 @@ async function fetchHistoryForPeriod(period) {
     const from365 = nowMs - 365 * 86_400_000;
     const opts = { instance: hc.sqlInstance, start: from365, end: nowMs, step: 3600_000, aggregate: 'average' };
     const solarPts = await getHistory(hc.solar, opts);
+    if (activePeriod !== period) return; // user switched tab while fetching
     dailyBars = aggregateToDailyBars(solarPts, hc.solarUnit, nowMs);
     renderPowerChart();
   }
