@@ -100,6 +100,7 @@ export interface HistoryConfig {
 export interface DashboardConfig {
     updateIntervalSeconds: number;
     chartHistoryHours: number;
+    sqlInstance?: string;
 }
 
 export interface AdapterConfig {
@@ -315,4 +316,6 @@ export interface DashboardSnapshot {
     stats: SolarStatistics;
     ts: number;
     demo: boolean;
+    powerHistory?: PowerHistoryPoint[];
+    dailyBars?: DailySolarBar[];
 }

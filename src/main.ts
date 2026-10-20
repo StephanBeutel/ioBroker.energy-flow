@@ -44,6 +44,9 @@ class EnergyFlowAdapter extends utils.Adapter {
         "solar-house-ev",
         "grid-ev",
     ] as const;
+    private _cachedPowerHistory: PowerHistoryPoint[] | null = null;
+    private _cachedDailyBars: { date: string; kWh: number | null; complete: boolean }[] | null = null;
+    private _historyFetchedAt = 0;
 
     public constructor(options: Partial<utils.AdapterOptions> = {}) {
         super({ ...options, name: ADAPTER_NAME });
@@ -321,6 +324,7 @@ class EnergyFlowAdapter extends utils.Adapter {
             this.persistence.addPowerHistoryPoint(histPoint);
 
             // Build and broadcast snapshot for web dashboard
+            await this.refreshSqlHistoryIfNeeded(cfg);
             const snap: DashboardSnapshot = {
                 power,
                 flows,
@@ -329,6 +333,8 @@ class EnergyFlowAdapter extends utils.Adapter {
                 stats,
                 ts: nowMs,
                 demo: false,
+                powerHistory: this._cachedPowerHistory ?? this.persistence.getPowerHistory(cfg?.dashboard?.chartHistoryHours ?? 24),
+                dailyBars: this._cachedDailyBars ?? prunedData.dailyHistory.slice(-30).map((r) => ({ date: r.date, kWh: r.solar, complete: r.complete })),
             };
             await this.publishDashboardSnapshot(snap);
 
@@ -518,6 +524,103 @@ class EnergyFlowAdapter extends utils.Adapter {
             batteryCharge: await readMeter(cfg?.battery?.energyChargingObjectId, cfg?.battery?.energyChargingUnit ?? "kWh"),
             batteryDischarge: await readMeter(cfg?.battery?.energyDischargingObjectId, cfg?.battery?.energyDischargingUnit ?? "kWh"),
         };
+    }
+
+    private async refreshSqlHistoryIfNeeded(cfg: AdapterConfig): Promise<void> {
+        const sqlInstance = cfg?.dashboard?.sqlInstance;
+        if (!sqlInstance) return;
+
+        const chartHours = cfg?.dashboard?.chartHistoryHours ?? 24;
+        const refreshIntervalMs = Math.max(5 * 60_000, (chartHours * 3600_000) / 12);
+        if (Date.now() - this._historyFetchedAt < refreshIntervalMs) return;
+
+        const solar = cfg?.solar?.sources?.[0]?.objectId;
+        const grid = cfg?.grid?.powerObjectId;
+        const house = cfg?.house?.powerObjectId;
+        const batCharge = cfg?.battery?.chargingObjectId;
+        const batDischarge = cfg?.battery?.dischargingObjectId;
+        const batPower = cfg?.battery?.powerObjectId;
+
+        const nowMs = Date.now();
+        const fromMs = nowMs - chartHours * 3600_000;
+
+        interface SqlHistoryResult { result?: Array<{ ts: number; val: number | null }> }
+
+        const fetchOne = (id: string): Promise<Array<{ ts: number; val: number | null }>> =>
+            new Promise((resolve) => {
+                this.sendTo(sqlInstance, "getHistory", {
+                    id,
+                    options: { start: fromMs, end: nowMs, step: 300_000, aggregate: "average" },
+                }, (res: unknown) => {
+                    const r = res as SqlHistoryResult | undefined;
+                    resolve(r?.result ?? []);
+                });
+            });
+
+        try {
+            const [solarPts, gridPts, housePts, batChargePts, batDischargePts, batPowerPts] = await Promise.all([
+                solar ? fetchOne(solar) : Promise.resolve([]),
+                grid ? fetchOne(grid) : Promise.resolve([]),
+                house ? fetchOne(house) : Promise.resolve([]),
+                batCharge ? fetchOne(batCharge) : Promise.resolve([]),
+                batDischarge ? fetchOne(batDischarge) : Promise.resolve([]),
+                batPower && !batCharge ? fetchOne(batPower) : Promise.resolve([]),
+            ]);
+
+            // Merge into PowerHistoryPoint array keyed by timestamp
+            const map = new Map<number, PowerHistoryPoint>();
+            const ensure = (ts: number): PowerHistoryPoint => {
+                if (!map.has(ts)) map.set(ts, { ts, solar: null, house: null, battery: null, grid: null, ev: null });
+                return map.get(ts)!;
+            };
+
+            const solarUnit = cfg?.solar?.sources?.[0]?.unit ?? "W";
+            const gridUnit = cfg?.grid?.powerUnit ?? "W";
+            const houseUnit = cfg?.house?.powerUnit ?? "W";
+            const batUnit = batCharge ? (cfg?.battery?.chargingUnit ?? "kW") : (cfg?.battery?.powerUnit ?? "W");
+            const toW = (v: number | null, unit: string): number | null =>
+                v === null ? null : unit === "kW" ? v * 1000 : v;
+
+            for (const p of solarPts) ensure(p.ts).solar = toW(p.val, solarUnit);
+            for (const p of gridPts) ensure(p.ts).grid = toW(p.val, gridUnit);
+            for (const p of housePts) ensure(p.ts).house = toW(p.val, houseUnit);
+
+            if (batCharge && batDischarge) {
+                const batDischargeMap = new Map(batDischargePts.map((p) => [p.ts, p.val]));
+                for (const p of batChargePts) {
+                    const discharge = toW(batDischargeMap.get(p.ts) ?? null, batUnit) ?? 0;
+                    const charge = toW(p.val, batUnit) ?? 0;
+                    ensure(p.ts).battery = discharge - charge;
+                }
+            } else {
+                for (const p of batPowerPts) ensure(p.ts).battery = toW(p.val, batUnit);
+            }
+
+            this._cachedPowerHistory = Array.from(map.values()).sort((a, b) => a.ts - b.ts);
+
+            // Daily bars from solar history — sum 5-min averages per day
+            if (solar && solarPts.length > 0) {
+                // Fetch 30 days for daily bars
+                const from30 = nowMs - 30 * 86_400_000;
+                const solar30 = from30 < fromMs ? await fetchOne(solar).catch(() => solarPts) : solarPts;
+                const dayMap = new Map<string, number>();
+                for (const p of solar30) {
+                    if (p.val === null) continue;
+                    const day = new Date(p.ts).toISOString().substring(0, 10);
+                    const wh = toW(p.val, solarUnit)! * (300 / 3600); // 5-min average → Wh
+                    dayMap.set(day, (dayMap.get(day) ?? 0) + wh);
+                }
+                const today = new Date(nowMs).toISOString().substring(0, 10);
+                this._cachedDailyBars = Array.from(dayMap.entries())
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([date, wh]) => ({ date, kWh: wh / 1000, complete: date < today }));
+            }
+
+            this._historyFetchedAt = nowMs;
+            this.log.debug(`SQL history refreshed: ${this._cachedPowerHistory.length} power points, ${this._cachedDailyBars?.length ?? 0} daily bars`);
+        } catch (err) {
+            this.log.warn(`SQL history fetch failed: ${String(err)}`);
+        }
     }
 
     private async publishDashboardSnapshot(snap: DashboardSnapshot): Promise<void> {

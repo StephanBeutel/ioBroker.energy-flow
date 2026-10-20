@@ -65,6 +65,7 @@
   "history_daily_years": "Tagesauswertungen aufbewahren (Jahre)",
   "dashboard_interval_s": "Aktualisierungsintervall (Sekunden)",
   "dashboard_chart_hours": "Diagramm-Zeitfenster (Stunden)",
-  "open_dashboard": "Dashboard öffnen",
+  "dashboard_sql_instance": "SQL-Verlauf-Adapter-Instanz",
+  "dashboard_sql_instance_help": "SQL-Adapter-Instanz auswählen (z.B. sql.0) um Diagrammdaten direkt aus den Quelldatenpunkten zu laden. Leer lassen um den internen Verlauf zu verwenden.",
   "diag_info_text": "Diagnosezustände sind im Objektbaum unter energy-flow.X.diagnostics verfügbar."
 }

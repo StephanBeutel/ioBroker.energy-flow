@@ -448,6 +448,15 @@
           "default": 24,
           "xs": 12, "sm": 6, "md": 4
         },
+        "dashboard.sqlInstance": {
+          "type": "instance",
+          "label": "dashboard_sql_instance",
+          "help": "dashboard_sql_instance_help",
+          "adapter": "sql",
+          "allowDeactivate": true,
+          "newLine": true,
+          "xs": 12, "sm": 6, "md": 4
+        },
         "dashboard_open": {
           "type": "staticLink",
           "label": "open_dashboard",

@@ -691,6 +691,7 @@ function initSocket() {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
+        loadHistoryData();
         renderAll();
       } catch (e) {
         console.warn('[EF] Failed to parse snapshot state:', e);
@@ -711,6 +712,7 @@ async function loadData() {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
+        loadHistoryData();
         renderAll();
       } catch (e) {
         console.warn('[EF] Failed to parse snapshot:', e);
@@ -1364,7 +1366,10 @@ async function loadDemoData() {
 
 async function loadHistoryData() {
   if (snapshot && !snapshot.demo) {
-    // History charts not yet implemented for real mode
+    if (snapshot.powerHistory?.length) powerHistory = snapshot.powerHistory;
+    if (snapshot.dailyBars?.length) dailyBars = snapshot.dailyBars;
+    renderPowerChart();
+    renderBarChart();
     return;
   }
 

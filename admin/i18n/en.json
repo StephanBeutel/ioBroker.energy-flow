@@ -65,6 +65,7 @@
   "history_daily_years": "Daily statistics retention (years)",
   "dashboard_interval_s": "Update interval (seconds)",
   "dashboard_chart_hours": "Chart time window (hours)",
-  "open_dashboard": "Open dashboard",
+  "dashboard_sql_instance": "SQL history adapter instance",
+  "dashboard_sql_instance_help": "Select your SQL adapter instance (e.g. sql.0) to load chart history from source states directly. Leave empty to use the adapter's own internal history.",
   "diag_info_text": "Diagnostic states are available in the object tree under energy-flow.X.diagnostics."
 }

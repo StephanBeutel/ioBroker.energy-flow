@@ -133,7 +133,8 @@
     },
     "dashboard": {
       "updateIntervalSeconds": 10,
-      "chartHistoryHours": 24
+      "chartHistoryHours": 24,
+      "sqlInstance": "sql.0"
     }
   },
   "objects": [],
