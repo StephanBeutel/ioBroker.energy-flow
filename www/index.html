@@ -1202,6 +1202,7 @@ function renderPowerChart() {
     }
     const labels = bars.map(b => b.date.substring(5));
     const data = bars.map(b => b.kWh);
+    console.log('[EF] bar chart data:', bars.slice(0,3).map(b => b.date + '=' + b.kWh?.toFixed(3)));
     const colors = bars.map(b => b.complete ? '#10b981' : '#10b98180');
     powerChart = new Chart(canvas, {
       type: 'bar',
