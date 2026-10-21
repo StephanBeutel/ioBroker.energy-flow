@@ -1095,30 +1095,28 @@ function buildChartSection() {
   title.textContent = t.powerHistory;
   section.appendChild(title);
 
-  // Legend — only for today (line chart)
-  if (activePeriod === 'today') {
-    const legend = document.createElement('div');
-    legend.className = 'legend';
-    const series = [
-      { key: 'solar', label: t.solar, color: '#10b981' },
-      { key: 'house', label: t.house, color: '#3b82f6' },
-      { key: 'battery', label: t.battery, color: '#06b6d4' },
-      { key: 'grid', label: t.grid, color: '#f97316' },
-      { key: 'ev', label: t.ev, color: '#8b5cf6' },
-    ];
-    series.forEach(({ key, label, color }) => {
-      const item = document.createElement('div');
-      item.className = 'legend-item' + (activeChartSeries[key] ? ' active' : '');
-      item.innerHTML = `<span class="legend-dot" style="background:${color}"></span>${escapeHtml(label)}`;
-      item.addEventListener('click', () => {
-        activeChartSeries[key] = !activeChartSeries[key];
-        renderPowerChart();
-        item.classList.toggle('active');
-      });
-      legend.appendChild(item);
+  // Legend for all periods
+  const legend = document.createElement('div');
+  legend.className = 'legend';
+  const series = [
+    { key: 'solar', label: t.solar, color: '#10b981' },
+    { key: 'house', label: t.house, color: '#3b82f6' },
+    { key: 'battery', label: t.battery, color: '#06b6d4' },
+    { key: 'grid', label: t.grid, color: '#f97316' },
+    { key: 'ev', label: t.ev, color: '#8b5cf6' },
+  ];
+  series.forEach(({ key, label, color }) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item' + (activeChartSeries[key] ? ' active' : '');
+    item.innerHTML = `<span class="legend-dot" style="background:${color}"></span>${escapeHtml(label)}`;
+    item.addEventListener('click', () => {
+      activeChartSeries[key] = !activeChartSeries[key];
+      renderPowerChart();
+      item.classList.toggle('active');
     });
-    section.appendChild(legend);
-  }
+    legend.appendChild(item);
+  });
+  section.appendChild(legend);
 
   const container = document.createElement('div');
   container.className = 'chart-container tall';
@@ -1154,9 +1152,10 @@ function renderPowerChart() {
     const mm = d.getMinutes().toString().padStart(2,'0');
     const dd = d.getDate().toString().padStart(2,'0');
     const mo = (d.getMonth()+1).toString().padStart(2,'0');
+    const yy = d.getFullYear().toString().substring(2);
     if (activePeriod === 'today') return `${hh}:${mm}`;
-    if (activePeriod === 'month') return `${dd}.${mo} ${hh}:00`;
-    return `${dd}.${mo}`;
+    if (activePeriod === 'month') return `${dd}.${mo}`;
+    return `${mo}.${yy}`;
   });
 
   const maxTicks = activePeriod === 'today' ? 12 : activePeriod === 'month' ? 15 : 12;
@@ -1221,18 +1220,31 @@ function renderBarChart() {
 
   let bars;
   if (activePeriod === 'year') {
-    // Aggregate daily bars into monthly totals
+    // Aggregate daily kWh into monthly totals
     const monthly = new Map();
     dailyBars.forEach(b => {
-      const mon = b.date.substring(0, 7);
+      const mon = b.date.substring(0, 7); // YYYY-MM
       monthly.set(mon, (monthly.get(mon) ?? 0) + (b.kWh ?? 0));
     });
-    bars = Array.from(monthly.entries()).map(([mon, kWh]) => ({ date: mon, kWh, complete: true }));
+    bars = Array.from(monthly.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mon, kWh]) => ({ date: mon, kWh, complete: true }));
   } else {
     bars = dailyBars.slice(-30);
   }
 
-  const labels = bars.map(b => b.date.substring(5));
+  const fmtBarLabel = d => {
+    if (activePeriod === 'year') {
+      // d = 'YYYY-MM' → 'MM.YY'
+      const [yr, mo] = d.split('-');
+      return `${mo}.${yr.substring(2)}`;
+    }
+    // d = 'YYYY-MM-DD' → 'DD.MM'
+    const [, mo, dd] = d.split('-');
+    return `${dd}.${mo}`;
+  };
+
+  const labels = bars.map(b => fmtBarLabel(b.date));
   const data = bars.map(b => b.kWh);
   const colors = bars.map(b => b.complete ? '#10b981' : '#10b98180');
 
@@ -1486,6 +1498,7 @@ async function fetchHistoryForPeriod(period) {
   } else if (period === 'year') {
     if (!hc.solar) return;
     const from365 = nowMs - 365 * 86_400_000;
+    // Daily-step averages for power line chart; 1h-step for solar energy bars
     const opts24h = { instance: hc.sqlInstance, start: from365, end: nowMs, step: 86_400_000, aggregate: 'average' };
     const opts1h  = { instance: hc.sqlInstance, start: from365, end: nowMs, step: 3_600_000,  aggregate: 'average' };
 
@@ -1497,6 +1510,7 @@ async function fetchHistoryForPeriod(period) {
     ]);
     if (activePeriod !== period) return;
     powerHistory = mergePowerHistory(results);
+    // Build daily bars from 1h data so monthly aggregation is accurate
     dailyBars = aggregateToDailyBars(results['__solar1h'], hc.solarUnit, nowMs);
     renderPowerChart();
     renderBarChart();
@@ -1521,16 +1535,33 @@ function aggregateToDailyBars(pts, unit, nowMs) {
 function loadDemoHistory() {
   const now = Date.now();
   if (powerHistory.length === 0) {
-    for (let i = 1440; i >= 0; i--) {
-      const t_h = now - i * 60000;
-      const hour = new Date(t_h).getHours() + new Date(t_h).getMinutes() / 60;
-      const solarW = hour >= 6 && hour <= 20 ? Math.max(0, Math.sin((hour - 6) / 14 * Math.PI) * 5000) : 0;
-      powerHistory.push({ ts: t_h, solar: solarW + (Math.random() - 0.5) * 200, house: 1500 + Math.random() * 1000, battery: solarW > 2000 ? -(solarW - 2500) : solarW < 500 && hour < 20 ? 1000 : 0, grid: Math.random() > 0.7 ? -500 : 300, ev: null });
+    if (activePeriod === 'today') {
+      // 1-min resolution for 24h
+      for (let i = 1440; i >= 0; i--) {
+        const t_h = now - i * 60_000;
+        const hour = new Date(t_h).getHours() + new Date(t_h).getMinutes() / 60;
+        const solarW = hour >= 6 && hour <= 20 ? Math.max(0, Math.sin((hour - 6) / 14 * Math.PI) * 5000) : 0;
+        powerHistory.push({ ts: t_h, solar: solarW + (Math.random() - 0.5) * 200, house: 1500 + Math.random() * 1000, battery: solarW > 2000 ? -(solarW - 2500) : solarW < 500 && hour < 20 ? 1000 : 0, grid: Math.random() > 0.7 ? -500 : 300, ev: null });
+      }
+    } else if (activePeriod === 'month') {
+      // 1h resolution for 30 days
+      for (let i = 30 * 24; i >= 0; i--) {
+        const t_h = now - i * 3_600_000;
+        const hour = new Date(t_h).getHours();
+        const solarW = hour >= 6 && hour <= 20 ? Math.max(0, Math.sin((hour - 6) / 14 * Math.PI) * 5000) : 0;
+        powerHistory.push({ ts: t_h, solar: solarW + (Math.random() - 0.5) * 300, house: 1500 + Math.random() * 1000, battery: solarW > 2000 ? -800 : 500, grid: Math.random() > 0.6 ? -500 : 400, ev: null });
+      }
+    } else {
+      // 1-day resolution for 365 days
+      for (let i = 365; i >= 0; i--) {
+        const t_h = now - i * 86_400_000;
+        powerHistory.push({ ts: t_h, solar: 1500 + Math.random() * 2000, house: 2000 + Math.random() * 800, battery: Math.random() > 0.5 ? -400 : 400, grid: Math.random() > 0.5 ? -300 : 500, ev: null });
+      }
     }
   }
   if (dailyBars.length === 0) {
-    for (let i = 30; i >= 1; i--) {
-      const d = new Date(now - i * 86400000);
+    for (let i = 365; i >= 1; i--) {
+      const d = new Date(now - i * 86_400_000);
       dailyBars.push({ date: d.toISOString().substring(0, 10), kWh: 5 + Math.random() * 30, complete: true });
     }
   }
