@@ -57,7 +57,10 @@ class EnergyFlowAdapter extends utils.Adapter {
 
     private async uploadWwwFiles(): Promise<void> {
         const wwwDir = path.join(__dirname, "www");
-        if (!fs.existsSync(wwwDir)) return;
+        if (!fs.existsSync(wwwDir)) {
+            this.log.warn(`Dashboard files not found in ${wwwDir} - /${ADAPTER_NAME}.${this.instance}/ not updated`);
+            return;
+        }
         const namespace = `${ADAPTER_NAME}.${this.instance}`;
 
         // Ensure the meta object exists for this namespace
@@ -70,17 +73,21 @@ class EnergyFlowAdapter extends utils.Adapter {
             } as ioBroker.MetaObject);
         }
 
+        // Overwrite on every start so /energy-flow.N/ always serves the installed version
         const files = fs.readdirSync(wwwDir);
+        let uploaded = 0;
         for (const file of files) {
             const filePath = path.join(wwwDir, file);
             if (!fs.statSync(filePath).isFile()) continue;
             try {
                 const content = fs.readFileSync(filePath);
                 await this.writeFileAsync(namespace, file, content);
+                uploaded++;
             } catch (e) {
                 this.log.warn(`Could not upload www/${file}: ${e}`);
             }
         }
+        this.log.info(`Dashboard v${this.version}: uploaded ${uploaded} files to /${namespace}/`);
     }
 
     private async onReady(): Promise<void> {

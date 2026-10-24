@@ -77,8 +77,10 @@ class EnergyFlowAdapter extends utils.Adapter {
     }
     async uploadWwwFiles() {
         const wwwDir = path.join(__dirname, "www");
-        if (!fs.existsSync(wwwDir))
+        if (!fs.existsSync(wwwDir)) {
+            this.log.warn(`Dashboard files not found in ${wwwDir} - /${ADAPTER_NAME}.${this.instance}/ not updated`);
             return;
+        }
         const namespace = `${ADAPTER_NAME}.${this.instance}`;
         // Ensure the meta object exists for this namespace
         const metaObj = await this.getForeignObjectAsync(namespace);
@@ -89,7 +91,9 @@ class EnergyFlowAdapter extends utils.Adapter {
                 native: {},
             });
         }
+        // Overwrite on every start so /energy-flow.N/ always serves the installed version
         const files = fs.readdirSync(wwwDir);
+        let uploaded = 0;
         for (const file of files) {
             const filePath = path.join(wwwDir, file);
             if (!fs.statSync(filePath).isFile())
@@ -97,11 +101,13 @@ class EnergyFlowAdapter extends utils.Adapter {
             try {
                 const content = fs.readFileSync(filePath);
                 await this.writeFileAsync(namespace, file, content);
+                uploaded++;
             }
             catch (e) {
                 this.log.warn(`Could not upload www/${file}: ${e}`);
             }
         }
+        this.log.info(`Dashboard v${this.version}: uploaded ${uploaded} files to /${namespace}/`);
     }
     async onReady() {
         this.persistence = new persistence_1.PersistenceManager(this);
