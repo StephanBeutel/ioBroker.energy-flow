@@ -132,7 +132,7 @@
       "dailyRetentionYears": 10
     },
     "dashboard": {
-      "updateIntervalSeconds": 10,
+      "updateIntervalSeconds": 5,
       "chartHistoryHours": 24,
       "sqlInstance": "sql.0"
     }

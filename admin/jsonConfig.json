@@ -438,7 +438,7 @@
         "dashboard.updateIntervalSeconds": {
           "type": "number",
           "label": "dashboard_interval_s",
-          "default": 10,
+          "default": 5,
           "newLine": true,
           "xs": 12, "sm": 6, "md": 4
         },

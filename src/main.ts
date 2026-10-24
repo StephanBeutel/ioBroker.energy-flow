@@ -33,6 +33,7 @@ class EnergyFlowAdapter extends utils.Adapter {
     private persistence!: PersistenceManager;
     private stateManager!: StateManager;
     private updateTimer: ReturnType<typeof setTimeout> | null = null;
+    private intervalTimer: ReturnType<typeof setInterval> | null = null;
     private subscribedIds = new Set<string>();
     private demoMode = false;
     private demoScenarioIndex = 0;
@@ -108,9 +109,9 @@ class EnergyFlowAdapter extends utils.Adapter {
         // Start periodic updates
         const intervalMs = Math.max(
             UPDATE_MIN_INTERVAL_MS,
-            ((cfg?.dashboard?.updateIntervalSeconds ?? 10) * 1000),
+            ((cfg?.dashboard?.updateIntervalSeconds ?? 5) * 1000),
         );
-        this.scheduleUpdate(intervalMs);
+        this.intervalTimer = setInterval(() => this.scheduleUpdate(0), intervalMs);
 
         this.log.info("Energy Flow adapter started");
     }
@@ -615,6 +616,10 @@ class EnergyFlowAdapter extends utils.Adapter {
             if (this.updateTimer) {
                 clearTimeout(this.updateTimer);
                 this.updateTimer = null;
+            }
+            if (this.intervalTimer) {
+                clearInterval(this.intervalTimer);
+                this.intervalTimer = null;
             }
             await this.setState("info.connection", { val: false, ack: true });
             await this.setState("info.status", { val: "stopped", ack: true });
