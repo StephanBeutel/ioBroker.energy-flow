@@ -112,6 +112,14 @@
     border: 1px solid var(--border);
   }
 
+  .refresh-btn {
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+  }
+  .refresh-btn:hover { border-color: var(--cyan); }
+  .refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+
   .status-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
@@ -556,6 +564,9 @@
       <span class="status-dot" id="statusDot"></span>
       <span id="statusText">Verbinde...</span>
     </div>
+    <button id="refreshBtn" class="status-badge refresh-btn" type="button" title="Aktualisieren" aria-label="Aktualisieren">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 11-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+    </button>
     <select id="langSelect" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;">
       <option value="de">DE</option>
       <option value="en">EN</option>
@@ -595,7 +606,7 @@ const I18N = {
     demoMode: 'Demo-Modus', statistics: 'Statistik',
     conflictBalance: 'Leistungsbilanz-Konflikt', conflictEv: 'EV-Mess-Konflikt',
     connected: 'Verbunden', disconnected: 'Getrennt', connecting: 'Verbinde...',
-    flowsEstimated: 'Flüsse geschätzt',
+    flowsEstimated: 'Flüsse geschätzt', refresh: 'Aktualisieren',
   },
   en: {
     solar: 'Solar', battery: 'Battery', grid: 'Grid', house: 'Household', ev: 'EV Charging',
@@ -610,18 +621,25 @@ const I18N = {
     demoMode: 'Demo mode', statistics: 'Statistics',
     conflictBalance: 'Power balance conflict', conflictEv: 'EV measurement conflict',
     connected: 'Connected', disconnected: 'Disconnected', connecting: 'Connecting...',
-    flowsEstimated: 'Flows estimated',
+    flowsEstimated: 'Flows estimated', refresh: 'Refresh',
   }
 };
 
 let lang = localStorage.getItem('ef-lang') || 'de';
 let t = I18N[lang];
 
+function applyHeaderLabels() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) { btn.title = t.refresh; btn.setAttribute('aria-label', t.refresh); }
+}
+
 document.getElementById('langSelect').value = lang;
+applyHeaderLabels();
 document.getElementById('langSelect').addEventListener('change', (e) => {
   lang = e.target.value;
   localStorage.setItem('ef-lang', lang);
   t = I18N[lang];
+  applyHeaderLabels();
   document.getElementById('demoBanner').textContent =
     lang === 'de'
       ? '⚠️ DEMO-MODUS – Synthetische Daten. Echte Statistiken werden nicht verändert.'
@@ -712,10 +730,8 @@ function initSocket() {
       try {
         snapshot = JSON.parse(state.val);
         setStatus('live', t.connected);
-        renderAll();
-        if (activePeriod === 'today') {
-          loadHistoryData();
-        }
+        // Live updates only redraw the flow diagram; the rest refreshes every 30 s (refreshDashboard)
+        updateFlowSection();
       } catch (e) {
         console.warn('[EF] Failed to parse snapshot state:', e);
       }
@@ -795,6 +811,7 @@ function renderAll() {
   // Update timestamp
   const ts = document.createElement('p');
   ts.className = 'last-update';
+  ts.id = 'lastUpdate';
   ts.style.gridColumn = '1 / -1';
   ts.textContent = `${t.lastUpdate}: ${fmtTime(s.ts)}`;
   main.appendChild(ts);
@@ -804,6 +821,36 @@ function renderAll() {
     renderPowerChart();
     renderBarChart();
   });
+}
+
+// Swap in a fresh flow diagram without touching the charts and other cards
+function updateFlowSection() {
+  const old = document.querySelector('#mainContent .flow-section');
+  if (!old || !snapshot) { renderAll(); return; }
+  old.replaceWith(buildFlowSection(snapshot));
+  const ts = document.getElementById('lastUpdate');
+  if (ts) ts.textContent = `${t.lastUpdate}: ${fmtTime(snapshot.ts)}`;
+}
+
+// Full redraw with the latest snapshot plus fresh chart history (30 s timer and refresh button)
+const DASHBOARD_REFRESH_MS = 30_000;
+let refreshTimer = null;
+
+async function refreshDashboard() {
+  if (!snapshot) return;
+  const btn = document.getElementById('refreshBtn');
+  btn?.classList.add('spinning');
+  try {
+    renderAll();
+    await loadHistoryData();
+  } finally {
+    btn?.classList.remove('spinning');
+  }
+}
+
+function startRefreshTimer() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(refreshDashboard, DASHBOARD_REFRESH_MS);
 }
 
 // ===== Flow diagram =====
@@ -1425,6 +1472,12 @@ async function init() {
   }
 
   initSocket();
+
+  document.getElementById('refreshBtn')?.addEventListener('click', () => {
+    startRefreshTimer();  // restart the 30 s cycle from the manual refresh
+    refreshDashboard();
+  });
+  startRefreshTimer();
 
   // Fallback demo if socket doesn't connect within 5s
   setTimeout(async () => {
