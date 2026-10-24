@@ -819,7 +819,8 @@ function buildFlowSection(s) {
 
   const flows = s.flows || {};
   const p = s.power || {};
-  const isEv = p.evStatus === 'charging' || (p.evCharging?.value != null && p.evCharging.value > 10);
+  // Show the EV node whenever EV is configured, so the layout doesn't jump when charging starts/stops
+  const isEv = (p.evStatus != null && p.evStatus !== 'unavailable') || (p.evCharging?.value != null && p.evCharging.value > 10);
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
@@ -837,9 +838,11 @@ function buildFlowSection(s) {
   Object.entries(colors).forEach(([name, color]) => {
     const marker = document.createElementNS(svgNS, 'marker');
     marker.setAttribute('id', `arrow-${name}`);
-    marker.setAttribute('markerWidth', '10');
-    marker.setAttribute('markerHeight', '7');
-    marker.setAttribute('refX', '9');
+    marker.setAttribute('viewBox', '0 0 10 7');
+    marker.setAttribute('markerUnits', 'userSpaceOnUse');
+    marker.setAttribute('markerWidth', '12');
+    marker.setAttribute('markerHeight', '9');
+    marker.setAttribute('refX', '10');
     marker.setAttribute('refY', '3.5');
     marker.setAttribute('orient', 'auto');
     const polygon = document.createElementNS(svgNS, 'polygon');
@@ -862,65 +865,93 @@ function buildFlowSection(s) {
   };
 
   if (isEv) {
-    nodes.ev = { x: W/2 - nodeW/2 + 160, y: H - nodeH - 20, label: t.ev, color: colors.ev, type: 'ev' };
+    // House and EV side by side at the bottom
+    nodes.house.x = W/2 - nodeW - 30;
+    nodes.ev = { x: W/2 + 30, y: H - nodeH - 20, label: t.ev, color: colors.ev, type: 'ev' };
   }
 
-  // Only the connections relevant for this installation:
-  // solar ↔ battery, battery ↔ house, battery ↔ grid, house ↔ grid
-  // Direction driven by which flow value is non-zero
-  const connections = [
-    { from: 'solar',   to: 'battery', flow: flows.solarToBattery, color: colors.solar },
-    { from: 'battery', to: 'house',   flow: flows.batteryToHouse, color: colors.battery },
-    { from: 'battery', to: 'grid',    flow: flows.batteryToGrid,  color: colors.battery },
-    { from: 'grid',    to: 'battery', flow: flows.gridToBattery,  color: colors.grid },
-    { from: 'grid',    to: 'house',   flow: flows.gridToHouse,    color: colors.grid },
-    { from: 'house',   to: 'grid',    flow: flows.houseToGrid,    color: colors.house },
+  // One line per node pair; ab = flow a→b, ba = flow b→a (only for bidirectional pairs).
+  // bend curves the line (positive = to the right of a→b), labelT positions the label along it.
+  const links = [
+    { a: 'solar',   b: 'house',   ab: flows.solarToHouse,   labelT: 0.4 },
+    { a: 'solar',   b: 'battery', ab: flows.solarToBattery },
+    { a: 'solar',   b: 'grid',    ab: flows.solarToGrid },
+    { a: 'battery', b: 'house',   ab: flows.batteryToHouse },
+    { a: 'grid',    b: 'house',   ab: flows.gridToHouse },
+    { a: 'battery', b: 'grid',    ab: flows.batteryToGrid, ba: flows.gridToBattery, bend: 50, labelT: 0.3 },
   ];
 
   if (isEv) {
-    connections.push(
-      { from: 'solar', to: 'ev', flow: flows.solarToEv, color: colors.solar },
-      { from: 'grid', to: 'ev', flow: flows.gridToEv, color: colors.grid },
-      { from: 'battery', to: 'ev', flow: flows.batteryToEv, color: colors.battery },
+    links.push(
+      { a: 'solar',   b: 'ev', ab: flows.solarToEv },
+      { a: 'grid',    b: 'ev', ab: flows.gridToEv },
+      { a: 'battery', b: 'ev', ab: flows.batteryToEv },
     );
   }
 
-  connections.forEach(({ from, to, flow, color }) => {
-    if (!nodes[from] || !nodes[to]) return;
-    const active = flow?.value && flow.value > 10;
-    const fN = nodes[from];
-    const tN = nodes[to];
+  const isActive = (f) => f?.value != null && f.value > 10;
 
-    const x1 = fN.x + nodeW / 2;
-    const y1 = fN.y + nodeH / 2;
-    const x2 = tN.x + nodeW / 2;
-    const y2 = tN.y + nodeH / 2;
+  // Point where the ray from the node centre towards (tx, ty) leaves the node box (plus gap)
+  const edgePoint = (n, tx, ty, gap) => {
+    const cx = n.x + nodeW / 2, cy = n.y + nodeH / 2;
+    const dx = tx - cx, dy = ty - cy;
+    const s = Math.min(
+      dx ? (nodeW / 2 + gap) / Math.abs(dx) : Infinity,
+      dy ? (nodeH / 2 + gap) / Math.abs(dy) : Infinity,
+    );
+    return { x: cx + dx * s, y: cy + dy * s };
+  };
 
+  links.forEach(({ a, b, ab, ba, bend = 0, labelT = 0.5 }) => {
+    if (!nodes[a] || !nodes[b]) return;
+
+    // Pick the active direction; with nothing active, draw a dim a→b line
+    let from = a, to = b, flow = ab;
+    if (!isActive(ab) && isActive(ba)) { from = b; to = a; flow = ba; }
+    const active = isActive(flow);
+
+    // Control point from the fixed a→b orientation so the curve doesn't flip with the direction
+    const ac = { x: nodes[a].x + nodeW / 2, y: nodes[a].y + nodeH / 2 };
+    const bc = { x: nodes[b].x + nodeW / 2, y: nodes[b].y + nodeH / 2 };
+    const len = Math.hypot(bc.x - ac.x, bc.y - ac.y) || 1;
+    const nx = -(bc.y - ac.y) / len, ny = (bc.x - ac.x) / len;
+    const c = { x: (ac.x + bc.x) / 2 + nx * bend, y: (ac.y + bc.y) / 2 + ny * bend };
+
+    // Clip both ends to the node borders so the arrowhead is visible
+    const pa = edgePoint(nodes[a], c.x, c.y, 4);
+    const pb = edgePoint(nodes[b], c.x, c.y, 4);
+    const [p1, p2] = from === a ? [pa, pb] : [pb, pa];
+
+    const color = colors[from];
     const path = document.createElementNS(svgNS, 'path');
-    const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2;
-    path.setAttribute('d', `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`);
+    path.setAttribute('d', `M ${p1.x} ${p1.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`);
     path.setAttribute('stroke', color);
     path.setAttribute('class', active ? 'flow-line active' : 'flow-line inactive');
     if (active) {
       path.setAttribute('stroke-dasharray', '12 6');
       path.setAttribute('marker-end', `url(#arrow-${from})`);
     }
-
     svg.appendChild(path);
 
-    // Flow label
-    if (active && flow?.value) {
-      const label = document.createElementNS(svgNS, 'text');
-      label.setAttribute('x', String(mx));
-      label.setAttribute('y', String(my - 8));
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('fill', color);
-      label.setAttribute('font-size', '11');
-      label.setAttribute('font-family', 'inherit');
-      label.textContent = fmtW(flow.value);
-      svg.appendChild(label);
-    }
+    if (!active) return;
+
+    // Label at labelT along a→b, pushed off the line on the outer side of the bend
+    // (or upwards/rightwards for straight lines)
+    const u = 1 - labelT;
+    const lx = u * u * pa.x + 2 * u * labelT * c.x + labelT * labelT * pb.x;
+    const ly = u * u * pa.y + 2 * u * labelT * c.y + labelT * labelT * pb.y;
+    let ox = nx, oy = ny;
+    if (bend < 0 || (bend === 0 && (oy > 0.01 || (Math.abs(oy) <= 0.01 && ox < 0)))) { ox = -ox; oy = -oy; }
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('x', String(lx + ox * 10));
+    label.setAttribute('y', String(ly + oy * 10));
+    label.setAttribute('text-anchor', Math.abs(ox) > 0.7 ? (ox > 0 ? 'start' : 'end') : 'middle');
+    label.setAttribute('dominant-baseline', oy > 0.7 ? 'hanging' : 'auto');
+    label.setAttribute('fill', color);
+    label.setAttribute('font-size', '11');
+    label.setAttribute('font-family', 'inherit');
+    label.textContent = fmtW(flow.value);
+    svg.appendChild(label);
   });
 
   // Draw nodes
@@ -969,7 +1000,8 @@ function buildFlowSection(s) {
       const soc = snapshot?.power?.batterySoc;
       const status = snapshot?.power?.batteryStatus;
       const statusLabel = status ? t[status] || status : '';
-      powerVal = fmtW(batt?.value);
+      // Direction is shown by the status label, so display the magnitude only
+      powerVal = fmtW(batt?.value != null ? Math.abs(batt.value) : null);
       subVal = `SoC: ${fmtPct(soc?.value)} · ${statusLabel}`;
       nodeStale = batt?.quality?.freshness === 'stale';
     } else if (type === 'grid') {
