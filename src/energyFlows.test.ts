@@ -9,7 +9,7 @@ const evCfg = { enabled: false, includedInHousehold: true };
 describe("Energy flows estimation", () => {
     it("solar → house when solar covers demand", () => {
         const flows = estimateFlows({
-            solarW: 3000, batteryW: 0, gridW: 0, houseW: 2500, evW: null,
+            solarW: 2500, batteryW: 0, gridW: 0, houseW: 2500, evW: null,
             batteryConfig: battCfg, evConfig: evCfg, nowMs: now,
         });
         expect(flows.solarToHouse.value).to.be.closeTo(2500, 1);
@@ -82,6 +82,35 @@ describe("Energy flows estimation", () => {
             evConfig: evCfg, nowMs: now,
         });
         expect(flows.batteryToGrid.value).to.be.closeTo(0, 1);
+    });
+
+    it("solar → battery charging, rest → house", () => {
+        const flows = estimateFlows({
+            solarW: 1190, batteryW: -1070, gridW: 0, houseW: 120, evW: null,
+            batteryConfig: battCfg, evConfig: evCfg, nowMs: now,
+        });
+        expect(flows.solarToBattery.value).to.be.closeTo(1070, 1);
+        expect(flows.solarToHouse.value).to.be.closeTo(120, 1);
+    });
+
+    it("grid export is kept when measured house doesn't match the balance", () => {
+        const flows = estimateFlows({
+            solarW: 1190, batteryW: -1070, gridW: -40, houseW: 200, evW: null,
+            batteryConfig: battCfg, evConfig: evCfg, nowMs: now,
+        });
+        expect(flows.solarToBattery.value).to.be.closeTo(1070, 1);
+        expect(flows.solarToGrid.value).to.be.closeTo(40, 1);
+        expect(flows.solarToHouse.value).to.be.closeTo(80, 1);
+    });
+
+    it("grid import is kept when measured house doesn't match the balance", () => {
+        const flows = estimateFlows({
+            solarW: 1190, batteryW: -1070, gridW: 300, houseW: 380, evW: null,
+            batteryConfig: { ...battCfg, gridChargingEnabled: false }, evConfig: evCfg, nowMs: now,
+        });
+        expect(flows.solarToHouse.value).to.be.closeTo(120, 1);
+        expect(flows.solarToBattery.value).to.be.closeTo(1070, 1);
+        expect(flows.gridToHouse.value).to.be.closeTo(300, 1);
     });
 
     it("all unavailable inputs → unavailable flows", () => {
